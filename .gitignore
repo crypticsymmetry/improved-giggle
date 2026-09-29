@@ -8,3 +8,6 @@ __pycache__/
 *.db
 build/
 dist/
+
+pytest-of-root/
+intervention_comparison.csv

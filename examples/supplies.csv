@@ -1,0 +1,4 @@
+id,sku,quantity,available_day,unit_cost
+stock,A,3,0,1
+shipment,A,7,2,1
+substitute,B,4,0,3

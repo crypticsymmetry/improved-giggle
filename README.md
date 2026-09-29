@@ -215,3 +215,85 @@ they are not silently undone. Past reservations must be reconciled explicitly.
 
 Automatic learned procedures, probabilistic diagnosis, free-form LLM extraction,
 and a hosted UI are extension points, rather than simulated capabilities.
+
+## Operational comparisons and CSV intake (v0.2)
+
+[**Run the operational comparison notebook in Colab**](https://colab.research.google.com/github/crypticsymmetry/improved-giggle/blob/main/notebooks/operational_scenarios.ipynb)
+
+The original walkthrough establishes the evidence/reasoning/commit invariants.
+The second notebook loads CSV data and compares business responses with compact
+service and cost tables. Both need no API keys. Bootstrap checks for the current
+comparison API and upgrades an older framework installation when necessary.
+
+```python
+from assumption_ops import load_csv_scenario, OperationsPipeline, Policy, Scenario
+
+data = load_csv_scenario(
+    "examples/supplies.csv", "examples/orders.csv",
+    Policy(substitutions={"A": ("B",)}),
+)
+with OperationsPipeline() as ops:
+    ops.seed(data.supplies, data.orders, data.policy)
+    original = ops.plan()
+    update = ops.propose("supply:shipment", "available_day", 8, "supplier confirmation")
+    ops.accept(update)
+    ops.resolve("supply:shipment", "available_day", update)
+    comparison = ops.compare_scenarios([
+        Scenario("expedite", {"supply:shipment": {"available_day": 3}}, action_cost=40),
+        Scenario("more substitutes", {"supply:substitute": {"quantity": 7}}, action_cost=20),
+        Scenario("late fulfillment", {"policy": {"config": {"allow_late": True}}}),
+    ], previous=original.plan)
+    print(comparison.rows())
+```
+
+Every comparison freezes accepted evidence, reservations, and the previous plan.
+Its results include evidence and operation revision identifiers and each candidate's explicit hypothetical overrides. It creates no
+observations, decisions, approvals, or reservations. Selecting the first ranked
+row does **not** apply that candidate. New availability or permissions must enter
+through the reviewed evidence lifecycle before a plan is approved.
+
+The independent `evaluate_plan` recomputes all objective terms from the allocation
+and rejects an objective mismatch. It reports requested/allocated/unfilled units,
+priority-weighted shortages, on-time/late/substitute units, unit-days late, allocation
+changes, fully fulfilled orders, and per-order service rows. With no previous plan,
+changed units are measured against an empty allocation; disruption cost remains
+zero, matching the optimizer. When using a previous plan, all options use the same
+reference. The original notebook's hypothetical and confirmed delay now use the
+same previous-plan penalty and have comparable objectives.
+
+Comparison guards hold order demand, priority, SKUs, and penalty weights fixed.
+They permit hypothetical supply quantity/date/cost changes, negotiated due dates,
+and eligibility-policy changes. Policy configuration in a comparison **merges**
+with the baseline so an eligibility change cannot accidentally reset cost weights.
+The existing standalone `what_if` contract still replaces a full supplied policy
+configuration and applies defaults to omitted fields.
+
+`action_cost` is a separate nonnegative fixed cost in the same units as the
+objective. Per-unit costs are already included: avoid counting them twice. These
+scores are modeled penalty units, not calibrated currency or demonstrated ROI.
+Negotiated dates, added stock, and action prices are hypothetical inputs needing
+confirmation. A time-limited solver result is explicitly labeled `feasible_limit`;
+ranked achieved scores then do not establish a globally optimal ranking.
+
+```bash
+assumption-ops --supplies-csv examples/supplies.csv --orders-csv examples/orders.csv \
+  --policy-json examples/policy.json --delay-supply shipment --available-day 8 \
+  --compare examples/interventions.json --report-csv /tmp/interventions.csv
+python scripts/benchmark.py --orders 25 100 --repeats 3
+```
+
+CSV intake rejects duplicate/unknown headers, missing fields, malformed rows,
+invalid integers, and duplicate IDs, with source-line errors. `unit_cost` and
+`priority` columns are optional and default to zero and one respectively when
+absent. An existing blank cell is an error. UTF-8 BOM and quoted commas work.
+JSON intake rejects extra fields, duplicate keys, nonfinite values, and implicit
+numeric coercion. Inputs are validated without running a solver.
+
+`write_comparison_csv` produces flat ranked rows and keeps spreadsheet formula-like
+string values literal. Its fixed action fees are advisory estimates, not booked
+payments or evidence-backed financial commitments. The benchmark script generates
+seeded synthetic cases, keeps individual timings, and reports medians for initialization,
+planning, and a four-solve comparison. It is a reproducible scaling probe, not a
+business-outcome study; timing thresholds are not used as flaky test assertions.
+
+New modules: `evaluation.py`, `scenarios.py`, `intake.py`, and `export.py`.

@@ -1,0 +1,24 @@
+[
+  {
+    "name": "expedite shipment",
+    "overrides": {"supply:shipment": {"available_day": 3}},
+    "action_cost": 40
+  },
+  {
+    "name": "buy more substitute stock",
+    "overrides": {"supply:substitute": {"quantity": 7}},
+    "action_cost": 20
+  },
+  {
+    "name": "permit late fulfillment",
+    "overrides": {"policy": {"config": {
+      "substitutions": {"A": ["B"]},
+      "allow_late": true,
+      "late_penalty": 10,
+      "substitution_penalty": 2,
+      "disruption_penalty": 1,
+      "unfilled_penalty": 1000
+    }}},
+    "action_cost": 0
+  }
+]

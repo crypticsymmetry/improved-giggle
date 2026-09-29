@@ -18,6 +18,7 @@ from uuid import uuid4
 from .atms import ATMS
 from .evidence import EvidenceConflict, EvidenceStore
 from .optimizer import Allocation, Order, Plan, Policy, Supply, optimize, validate_inputs
+from .scenarios import Scenario, ScenarioComparison, compare_scenarios as compare_interventions
 
 
 class StaleDecisionError(RuntimeError):
@@ -117,8 +118,8 @@ class OperationsPipeline:
         with self._lock, self._transaction():
             if self._db.execute("SELECT 1 FROM ops_state WHERE key='scenario'").fetchone():
                 raise ValueError("Scenario already seeded")
-            # The solver independently validates all domain values before persistence.
-            optimize(supplies, orders, policy)
+            # Validate once without solving: initialization does not allocate anything.
+            validate_inputs(supplies, orders, policy)
             for prefix, records in (("supply", supplies), ("order", orders)):
                 for record in records:
                     for field, value in asdict(record).items():
@@ -182,8 +183,15 @@ class OperationsPipeline:
 
     @staticmethod
     def _policy(value: dict[str, Any]) -> Policy:
+        if not isinstance(value, dict):
+            raise ValueError("Policy config must be an object")
         config = dict(value)
-        config["substitutions"] = {k: tuple(v) for k, v in config.get("substitutions", {}).items()}
+        substitutions = config.get("substitutions", {})
+        if not isinstance(substitutions, dict) or any(
+            not isinstance(values, (list, tuple)) for values in substitutions.values()
+        ):
+            raise ValueError("Substitutions must map SKU strings to lists or tuples of SKUs")
+        config["substitutions"] = {key: tuple(values) for key, values in substitutions.items()}
         policy = Policy(**config)
         validate_inputs([], [], policy)
         return policy
@@ -290,6 +298,30 @@ class OperationsPipeline:
             validate_inputs(supplies, orders, policy)
             supplies, orders = self._remaining(supplies, orders)
             return optimize(supplies, orders, policy, previous)
+
+    def compare_scenarios(
+        self, scenarios: Sequence[Scenario], *, previous: Plan | None = None
+    ) -> ScenarioComparison:
+        """Rank proposed interventions against one consistent accepted snapshot.
+
+        Every solve uses the same prior allocation and cost weights. No observation,
+        decision, approval, or reservation is created. Returned revisions identify
+        the snapshot; selecting a candidate does not apply it to accepted evidence.
+        """
+        with self._lock, self._transaction():
+            supplies, orders, policy, _ = self._snapshot()
+            row = self._db.execute("SELECT COALESCE(MAX(sequence),0) FROM ops_events").fetchone()
+            return compare_interventions(
+                supplies,
+                orders,
+                policy,
+                scenarios,
+                previous,
+                reserved_supply=self._reserved("supply_id"),
+                reserved_order=self._reserved("order_id"),
+                evidence_revision=self.store.revision,
+                operations_revision=row[0],
+            )
 
     def plan(self, *, previous: Plan | None = None) -> PlanningResult:
         """Optimize outstanding demand against unreserved supply, recording proposals.

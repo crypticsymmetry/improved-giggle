@@ -2,8 +2,12 @@
 
 from .atms import ATMS, EnvironmentOverflow
 from .evidence import EvidenceConflict, EvidenceStore, JsonExtractor
+from .evaluation import CostBreakdown, Evaluation, evaluate_plan
+from .export import write_comparison_csv
+from .intake import ScenarioData, load_csv_scenario, load_json_scenario, load_policy_json
 from .optimizer import Allocation, Order, Plan, Policy, Supply, optimize, validate_plan
 from .pipeline import Decision, OperationsPipeline, PlanningResult, StaleDecisionError
+from .scenarios import Scenario, ScenarioComparison, ScenarioOutcome, compare_scenarios
 
 __all__ = [
     "ATMS",
@@ -22,4 +26,16 @@ __all__ = [
     "OperationsPipeline",
     "PlanningResult",
     "StaleDecisionError",
+    "CostBreakdown",
+    "Evaluation",
+    "evaluate_plan",
+    "Scenario",
+    "ScenarioComparison",
+    "ScenarioOutcome",
+    "compare_scenarios",
+    "ScenarioData",
+    "load_csv_scenario",
+    "load_json_scenario",
+    "load_policy_json",
+    "write_comparison_csv",
 ]

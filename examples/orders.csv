@@ -1,0 +1,3 @@
+id,sku,quantity,due_day,priority
+urgent,A,5,3,3
+standard,A,5,4,1
