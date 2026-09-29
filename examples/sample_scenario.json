@@ -1,0 +1,48 @@
+{
+  "supplies": [
+    {
+      "id": "stock",
+      "sku": "A",
+      "quantity": 3,
+      "available_day": 0,
+      "unit_cost": 1
+    },
+    {
+      "id": "shipment",
+      "sku": "A",
+      "quantity": 7,
+      "available_day": 2,
+      "unit_cost": 1
+    },
+    {
+      "id": "substitute",
+      "sku": "B",
+      "quantity": 4,
+      "available_day": 0,
+      "unit_cost": 3
+    }
+  ],
+  "orders": [
+    {
+      "id": "urgent",
+      "sku": "A",
+      "quantity": 5,
+      "due_day": 3,
+      "priority": 3
+    },
+    {
+      "id": "standard",
+      "sku": "A",
+      "quantity": 5,
+      "due_day": 4,
+      "priority": 1
+    }
+  ],
+  "policy": {
+    "substitutions": {
+      "A": [
+        "B"
+      ]
+    }
+  }
+}
