@@ -19,6 +19,8 @@ from .atms import ATMS
 from .evidence import EvidenceConflict, EvidenceStore
 from .optimizer import Allocation, Order, Plan, Policy, Supply, optimize, validate_inputs
 from .scenarios import Scenario, ScenarioComparison, compare_scenarios as compare_interventions
+from .events import EvidenceUpdate, UpdateReceipt, apply_updates, initialize_event_schema
+from .execution import approve_plan, commit_plan
 
 
 class StaleDecisionError(RuntimeError):
@@ -43,12 +45,14 @@ class PlanningResult:
     plan: Plan
     decisions: tuple[Decision, ...]
     evidence_revision: int
+    plan_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "plan": self.plan.to_dict(),
             "decisions": [d.to_dict() for d in self.decisions],
             "evidence_revision": self.evidence_revision,
+            "plan_id": self.plan_id,
         }
 
 
@@ -87,6 +91,7 @@ class OperationsPipeline:
             );
         """)
         self._db.commit()
+        initialize_event_schema(self._db)
         self.reasoner = ATMS(max_environments=max_environments)
         self._sync()
 
@@ -143,6 +148,34 @@ class OperationsPipeline:
                 )
                 self._event("scenario_seeded", {"supplies": len(supplies), "orders": len(orders)})
             self._sync()
+
+    def revisions(self) -> dict[str, int]:
+        """Return a consistent token for reviewed intake, without changing state."""
+        with self._lock, self._transaction():
+            row = self._db.execute("SELECT COALESCE(MAX(sequence),0) FROM ops_events").fetchone()
+            return {"evidence_revision": self.store.revision, "operations_revision": row[0]}
+
+    def apply_updates(
+        self,
+        event_id: str,
+        updates: Sequence[EvidenceUpdate],
+        *,
+        expected_evidence_revision: int,
+        expected_operations_revision: int,
+    ) -> UpdateReceipt:
+        """Atomically apply explicit caller-reviewed source confirmations.
+
+        This is a trusted local API, not an authenticated review service. New
+        evidence is accepted and resolves the named fields. Replayed event IDs
+        never reapply earlier facts; stale snapshots reject new event IDs.
+        """
+        return apply_updates(
+            self,
+            event_id,
+            updates,
+            expected_evidence_revision=expected_evidence_revision,
+            expected_operations_revision=expected_operations_revision,
+        )
 
     def propose(self, entity: str, field: str, value: Any, source: str) -> str:
         """Propose an observation. It has no effect until explicitly accepted."""
@@ -374,7 +407,7 @@ class OperationsPipeline:
                 },
             )
         self._sync()
-        return PlanningResult(plan, tuple(decisions), revision)
+        return PlanningResult(plan, tuple(decisions), revision, plan_id)
 
     def decisions(self) -> tuple[Decision, ...]:
         return tuple(
@@ -567,6 +600,14 @@ class OperationsPipeline:
                 },
             )
         return {"decision_id": decision_id, "status": "committed", "idempotent": False}
+
+    def approve_plan(self, plan_id: str) -> tuple[Decision, ...]:
+        """Explicitly approve a plan's pending decisions as one transaction."""
+        return approve_plan(self, plan_id)
+
+    def commit_plan(self, plan_id: str) -> dict[str, Any]:
+        """Reserve an approved plan atomically; records local intents only."""
+        return commit_plan(self, plan_id)
 
     def events(self) -> list[dict[str, Any]]:
         return [

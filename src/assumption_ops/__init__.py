@@ -2,6 +2,7 @@
 
 from .atms import ATMS, EnvironmentOverflow
 from .evidence import EvidenceConflict, EvidenceStore, JsonExtractor
+from .events import EvidenceUpdate, UpdateReceipt, StaleSnapshotError, IdempotencyConflict
 from .evaluation import CostBreakdown, Evaluation, evaluate_plan
 from .export import write_comparison_csv
 from .intake import ScenarioData, load_csv_scenario, load_json_scenario, load_policy_json
@@ -10,6 +11,10 @@ from .pipeline import Decision, OperationsPipeline, PlanningResult, StaleDecisio
 from .scenarios import Scenario, ScenarioComparison, ScenarioOutcome, compare_scenarios
 
 __all__ = [
+    "EvidenceUpdate",
+    "UpdateReceipt",
+    "StaleSnapshotError",
+    "IdempotencyConflict",
     "ATMS",
     "EnvironmentOverflow",
     "EvidenceConflict",

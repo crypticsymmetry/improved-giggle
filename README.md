@@ -297,3 +297,84 @@ planning, and a four-solve comparison. It is a reproducible scaling probe, not a
 business-outcome study; timing thresholds are not used as flaky test assertions.
 
 New modules: `evaluation.py`, `scenarios.py`, `intake.py`, and `export.py`.
+
+## Reviewed events and atomic plan execution (v0.3)
+
+[**Run the transactional workflow notebook in Colab**](https://colab.research.google.com/github/crypticsymmetry/improved-giggle/blob/main/notebooks/transactional_workflow.ipynb)
+
+The third notebook covers the transition from an advisory comparison to confirmed
+facts and local allocation intent. The examples are mock supplier confirmations;
+no external accounts or API keys are required.
+
+```python
+from assumption_ops import EvidenceUpdate
+
+snapshot = ops.revisions()
+receipt = ops.apply_updates(
+    "supplier-message-123",
+    [EvidenceUpdate("supply:shipment", "available_day", 3,
+                    "reviewed supplier confirmation 123")],
+    expected_evidence_revision=snapshot["evidence_revision"],
+    expected_operations_revision=snapshot["operations_revision"],
+)
+reviewed_plan = ops.plan(previous=original.plan)
+ops.approve_plan(reviewed_plan.plan_id)
+local_commit = ops.commit_plan(reviewed_plan.plan_id)
+```
+
+`apply_updates` is an explicit **trusted caller review boundary**. It proposes,
+accepts, and resolves the submitted values as one transaction. It must not be
+wired directly to unreviewed email parsing or model output. Use `propose` for
+incoming observations and a separate authorized review action for confirmations.
+The library does not authenticate a reviewer or prove source truth.
+
+The batch and every evidence/audit write share one SQLite transaction. A bad later
+field rolls back earlier updates. A source event ID maps to a durable payload hash
+and receipt in `ops_reviewed_batches`. Payload identity includes ordered fields,
+values, and source attribution; canonical JSON makes dictionary-key ordering
+irrelevant. A reused event ID with different content raises `IdempotencyConflict`.
+
+New event IDs must match **both** evidence and operations revisions under the
+write lock. `StaleSnapshotError` requires refreshing the review snapshot; it does
+not retry a changed decision automatically. Unaccepted proposals also advance the
+evidence revision, so this guard is conservative. Existing event IDs with identical
+payloads return their original receipt with `replayed=True` before stale checks.
+They never restore earlier facts, even after a later correction or process restart.
+Receipt revisions describe the original application, not the current database.
+
+Batches must be called at the top level, outside an existing database transaction.
+This ensures a returned receipt represents committed SQL and ATMS synchronization
+occurs after commit. The complete accepted snapshot is reflected in the logical
+engine only after the batch succeeds. Existing unresolved conflicts on unrelated
+fields remain visible; the batch resolves only its explicitly named fields.
+
+`PlanningResult.plan_id` identifies a recorded allocation group, including an
+empty group. `approve_plan` validates every pending decision and the group's
+aggregate capacity/demand before promoting anything. Approval reserves no stock.
+`commit_plan` requires every pending decision to be approved, then rechecks and
+reserves all new decisions within one outer transaction. A later failure rolls
+back earlier reservations, statuses, and intent events from that call. Previously
+committed members remain historical; retries skip them without duplicate intents.
+A known empty plan returns an idempotent no-op. Committing an allocation group does
+not imply full order fulfillment or physical dispatch.
+
+Opening an older v0.2 database creates the receipt table without rewriting existing
+observations or plan history. The replay and reservation checks remain durable
+across reopening. New tests cover migration, duplicate delivery, changed payloads,
+competing snapshots, full-batch rollback, ATMS consistency, injected approval/commit
+failures, and overlapping concurrent plan commits.
+
+```bash
+python scripts/replay_workflow.py
+python scripts/validate_notebook.py   # Executes all three notebooks.
+```
+
+The replay script creates a temporary persistent database, applies a mock delay,
+compares an expedite hypothesis, applies mock reviewed confirmations, reserves the
+replacement plan, retries deliveries, and reopens the database. It asserts that an
+old delay cannot overwrite the newer arrival and that intents are not duplicated.
+The hypothetical fixed intervention fee remains an advisory estimate; it is not
+booked by local plan commits. External dispatch, authenticated review, release,
+and compensation of already committed inventory remain integration work.
+
+New modules: `events.py` and `execution.py`.
