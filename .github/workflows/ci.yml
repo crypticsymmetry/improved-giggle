@@ -29,3 +29,5 @@ jobs:
       - run: assumption-ops-pilot --manifest examples/pilot/pilot.json --validate-only > /tmp/pilot-input.json
       - run: assumption-ops-pilot --manifest examples/pilot/pilot.json --config examples/pilot/calibration_config.json --output-dir /tmp/pilot-results > /tmp/pilot.json
       - run: assumption-ops-solvers --orders 10 --seeds 1729 --repeats 1 --output-dir /tmp/solver-results > /tmp/solvers.json
+      - run: assumption-ops-business --manifest examples/business_pilot/manifest.json --validate-only > /tmp/business-input.json
+      - run: assumption-ops-business --manifest examples/business_pilot/manifest.json --output-dir /tmp/business-results > /tmp/business.json

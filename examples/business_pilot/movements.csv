@@ -1,0 +1,4 @@
+movement_id,event_time,observed_at,sku,kind,quantity,source
+receipt-A,2026-10-02T08:00:00Z,2026-10-02T08:00:00Z,A,receipt,2,synthetic-erp
+dispatch-B,2026-10-02T08:30:00Z,2026-10-02T08:30:00Z,B,dispatch,1,synthetic-erp
+dispatch-A,2026-10-03T08:00:00Z,2026-10-03T08:00:00Z,A,dispatch,1,synthetic-erp

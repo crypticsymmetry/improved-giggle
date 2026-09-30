@@ -1,0 +1,7 @@
+order_id,event_time,observed_at,sku,quantity,due_date,priority,source
+constrained-A,2026-10-01T09:00:00Z,2026-10-01T09:00:00Z,A,4,2026-10-01,1,synthetic-erp
+flexible-B,2026-10-01T09:00:00Z,2026-10-01T09:00:00Z,B,6,2026-10-01,2,synthetic-erp
+constrained-A,2026-10-02T09:00:00Z,2026-10-02T09:00:00Z,A,3,2026-10-01,1,synthetic-erp
+flexible-B,2026-10-02T09:00:00Z,2026-10-02T09:00:00Z,B,5,2026-10-01,2,synthetic-erp
+new-A,2026-10-02T12:00:00Z,2026-10-03T08:45:00Z,A,2,2026-10-03,3,synthetic-erp
+constrained-A,2026-10-03T09:00:00Z,2026-10-03T09:00:00Z,A,0,2026-10-01,1,synthetic-erp

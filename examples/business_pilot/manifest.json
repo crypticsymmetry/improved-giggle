@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "name": "Synthetic recorded business pilot",
+  "group_id": "synthetic-business-pilot-001",
+  "synthetic": true,
+  "catalog_path": "catalog.csv",
+  "stock_snapshots_path": "stock_snapshots.csv",
+  "movements_path": "movements.csv",
+  "open_orders_path": "open_orders.csv",
+  "policy_path": "policy.json"
+}

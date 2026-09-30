@@ -1,0 +1,12 @@
+{
+  "substitutions": {
+    "B": [
+      "A"
+    ]
+  },
+  "allow_late": true,
+  "late_penalty": 10,
+  "substitution_penalty": 2,
+  "unfilled_penalty": 1000,
+  "disruption_penalty": 0
+}

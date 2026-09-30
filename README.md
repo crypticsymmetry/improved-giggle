@@ -708,3 +708,64 @@ existing warehouse projection retains its provisional flag. The next data adapte
 requires documented inventory timing and receipt/order semantics; snapshots,
 sales and stockout flags will not be converted into fictional receipts or latent
 demand.
+
+### v0.7: timestamped business-pilot intake
+
+The [business-pilot Colab notebook](https://colab.research.google.com/github/crypticsymmetry/improved-giggle/blob/main/notebooks/business_pilot.ipynb)
+loads a strict CSV bundle, reconciles physical inventory, and compares MILP,
+verified integer LP, earliest-due-date allocation, and priority/cost greedy on
+identical observed facts. The included bundle is **synthetic**. This release
+provides the intake/evaluation path for actual operational exports; it does not
+establish performance on a new real-world dataset.
+
+```bash
+python -m pip install -e '.[dev]'
+assumption-ops-business --manifest examples/business_pilot/manifest.json --validate-only
+assumption-ops-business --manifest examples/business_pilot/manifest.json --output-dir business_results
+# Replace this manifest with your own explicit CSV mapping and provenance:
+assumption-ops-business --manifest /path/to/business/manifest.json --output-dir business_results
+```
+
+The full [business-pilot data contract](docs/business_pilot.md) describes the
+six-file bundle: manifest, fixed catalog, complete stock snapshots, physical
+movements, authoritative remaining-order observations, and policy. Headers and
+units are explicit. Quantities are integer interchangeable units, costs are
+configured penalty units, timestamps are UTC, and due dates use calendar-day
+resolution. Fractional quantities, unknown SKUs, missing stock rows, ambiguous
+headers, conflicting identifiers, and paths escaping the manifest directory are
+rejected. Source labels and the nonsynthetic flag are caller assertions.
+
+Every complete stock snapshot defines a decision cutoff. Records become visible
+only after both their physical/event time and observation time. The opening
+snapshot anchors stock; receipts and explicit inbound adjustments add stock,
+while physical dispatches and outbound adjustments remove it. Later snapshots
+assert that ledger balance and never create additional supply. Negative balances
+in observation order or the admitted physical event history, and unexplained
+snapshot differences, block the comparison before any solver runs. Movements at
+the same physical or observation timestamp are atomic within their corresponding
+balance check.
+
+Order observations replace the previous remaining quantity; zero closes an
+order. They do not change stock. Physical dispatches do not implicitly clear
+orders, and proposed allocations do not become dispatches. Plans use currently
+available inventory at the decision day, preserving lateness for overdue orders
+instead of backdating stock to a receipt. Actual movement and order-observation
+timestamps remain in the source bundle and provenance hashes. Per-snapshot
+input/visible-fact hashes exclude future observations; the full report's source
+hash covers the whole supplied bundle.
+
+Reports contain independently checked feasibility, objective values, service
+metrics and solver statuses, with per-snapshot JSON/CSV output. Repeated backlog
+and alternative plans are **not summed** into demand, shortages or savings.
+These comparisons optimize each snapshot independently, with no prior-plan
+stability reference, fulfillment simulation, reservations or dispatch. Keep all
+snapshots with the same `group_id` together in any later calibration/holdout split;
+the business command does not perform calibration or enforce splits itself.
+
+The synthetic fixture deliberately exposes a local greedy choice that consumes
+stock needed by another order. On its opening snapshot, verified LP and MILP
+both score **2,044**, priority/cost greedy scores **4,028**, and earliest-due-date
+scores **4,040** in configured penalty units. This verifies the comparison path
+and demonstrates opportunity cost under the fixture's assumptions; it is not
+measured business savings. Use actual order/backlog exports, timestamped physical
+movements and reconciled inventory snapshots to obtain operational evidence.

@@ -1,0 +1,7 @@
+snapshot_id,observed_at,sku,quantity,source
+opening,2026-10-01T09:00:00Z,A,4,synthetic-erp
+opening,2026-10-01T09:00:00Z,B,4,synthetic-erp
+day-2,2026-10-02T09:00:00Z,A,6,synthetic-erp
+day-2,2026-10-02T09:00:00Z,B,3,synthetic-erp
+day-3,2026-10-03T09:00:00Z,A,5,synthetic-erp
+day-3,2026-10-03T09:00:00Z,B,3,synthetic-erp

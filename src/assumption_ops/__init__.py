@@ -2,6 +2,17 @@
 
 from .atms import ATMS, EnvironmentOverflow
 from .baselines import compare_allocators
+from .business import (
+    BusinessPilot,
+    CatalogItem,
+    DecisionSnapshot,
+    OpenOrderObservation,
+    PhysicalMovement,
+    StockSnapshot,
+    compare_business_pilot,
+    compile_business_pilot,
+)
+from .business_io import load_business_pilot, write_business_csv
 from .calibration import PenaltyCandidate, calibrate
 from .evidence import EvidenceConflict, EvidenceStore, JsonExtractor
 from .events import EvidenceUpdate, UpdateReceipt, StaleSnapshotError, IdempotencyConflict
@@ -30,6 +41,16 @@ from .warehouse_data import (
 )
 
 __all__ = [
+    "BusinessPilot",
+    "CatalogItem",
+    "DecisionSnapshot",
+    "OpenOrderObservation",
+    "PhysicalMovement",
+    "StockSnapshot",
+    "compare_business_pilot",
+    "compile_business_pilot",
+    "load_business_pilot",
+    "write_business_csv",
     "benchmark_solvers",
     "LPPlanError",
     "optimize_lp",

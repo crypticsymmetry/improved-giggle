@@ -16,3 +16,5 @@ pilot_results/
 warehouse_results/
 *.accdb
 solver_results/
+business_results/
+business_pilot_results/
