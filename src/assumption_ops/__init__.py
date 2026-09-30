@@ -1,6 +1,8 @@
 """Evidence-backed, assumption-aware operations planning."""
 
 from .atms import ATMS, EnvironmentOverflow
+from .baselines import compare_allocators
+from .calibration import PenaltyCandidate, calibrate
 from .evidence import EvidenceConflict, EvidenceStore, JsonExtractor
 from .events import EvidenceUpdate, UpdateReceipt, StaleSnapshotError, IdempotencyConflict
 from .evaluation import CostBreakdown, Evaluation, evaluate_plan
@@ -8,10 +10,37 @@ from .export import write_comparison_csv
 from .intake import ScenarioData, load_csv_scenario, load_json_scenario, load_policy_json
 from .optimizer import Allocation, Order, Plan, Policy, Supply, optimize, validate_plan
 from .pipeline import Decision, OperationsPipeline, PlanningResult, StaleDecisionError
+from .pilot import (
+    PilotDataset,
+    PilotEpisode,
+    dataset_summary,
+    load_pilot_dataset,
+    save_pilot_dataset,
+)
 from .replay import ReplayBatch, ReplayCase, run_replay
 from .scenarios import Scenario, ScenarioComparison, ScenarioOutcome, compare_scenarios
+from .warehouse_data import (
+    WarehouseData,
+    WarehouseRecord,
+    download_warehouse,
+    read_warehouse,
+    warehouse_scenario,
+)
 
 __all__ = [
+    "compare_allocators",
+    "WarehouseData",
+    "WarehouseRecord",
+    "download_warehouse",
+    "read_warehouse",
+    "warehouse_scenario",
+    "PenaltyCandidate",
+    "calibrate",
+    "PilotDataset",
+    "PilotEpisode",
+    "dataset_summary",
+    "load_pilot_dataset",
+    "save_pilot_dataset",
     "ReplayBatch",
     "ReplayCase",
     "run_replay",

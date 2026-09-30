@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "name": "SYNTHETIC offline pilot",
+  "episodes": [
+    {
+      "episode_id": "calibration-supplier_delay",
+      "group_id": "seed-1729",
+      "split": "calibration",
+      "case_path": "case_0000.json"
+    },
+    {
+      "episode_id": "calibration-stock_loss",
+      "group_id": "seed-1729",
+      "split": "calibration",
+      "case_path": "case_0001.json"
+    },
+    {
+      "episode_id": "holdout-supplier_delay",
+      "group_id": "seed-1731",
+      "split": "holdout",
+      "case_path": "case_0002.json"
+    },
+    {
+      "episode_id": "holdout-stock_loss",
+      "group_id": "seed-1731",
+      "split": "holdout",
+      "case_path": "case_0003.json"
+    }
+  ]
+}

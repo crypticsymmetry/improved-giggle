@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - run: python -m pip install -e '.[dev]'
+      - run: python -m pip install -e '.[dev,datasets]'
       - run: python -m ruff check src tests scripts
       - run: python -m ruff format --check src tests scripts
       - run: python -m pytest -q
@@ -26,3 +26,5 @@ jobs:
       - run: python scripts/benchmark.py --orders 10 --repeats 1 > /tmp/benchmark.json
       - run: python scripts/replay_workflow.py > /tmp/workflow.json
       - run: assumption-ops-replay --orders 6 --seeds 1729 --output-dir /tmp/replay-results > /tmp/replay.json
+      - run: assumption-ops-pilot --manifest examples/pilot/pilot.json --validate-only > /tmp/pilot-input.json
+      - run: assumption-ops-pilot --manifest examples/pilot/pilot.json --config examples/pilot/calibration_config.json --output-dir /tmp/pilot-results > /tmp/pilot.json

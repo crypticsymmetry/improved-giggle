@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "name": "stock_loss",
+  "synthetic": true,
+  "seed": 1729,
+  "initial": {
+    "supplies": [
+      {
+        "id": "stock-A",
+        "sku": "A",
+        "quantity": 3,
+        "available_day": 0,
+        "unit_cost": 4
+      },
+      {
+        "id": "shipment-A",
+        "sku": "A",
+        "quantity": 9,
+        "available_day": 2,
+        "unit_cost": 4
+      },
+      {
+        "id": "backup-A",
+        "sku": "A-alt",
+        "quantity": 4,
+        "available_day": 1,
+        "unit_cost": 12
+      },
+      {
+        "id": "stock-B",
+        "sku": "B",
+        "quantity": 4,
+        "available_day": 0,
+        "unit_cost": 5
+      },
+      {
+        "id": "shipment-B",
+        "sku": "B",
+        "quantity": 14,
+        "available_day": 2,
+        "unit_cost": 5
+      },
+      {
+        "id": "backup-B",
+        "sku": "B-alt",
+        "quantity": 6,
+        "available_day": 1,
+        "unit_cost": 13
+      },
+      {
+        "id": "stock-C",
+        "sku": "C",
+        "quantity": 4,
+        "available_day": 0,
+        "unit_cost": 6
+      },
+      {
+        "id": "shipment-C",
+        "sku": "C",
+        "quantity": 15,
+        "available_day": 2,
+        "unit_cost": 6
+      },
+      {
+        "id": "backup-C",
+        "sku": "C-alt",
+        "quantity": 6,
+        "available_day": 1,
+        "unit_cost": 14
+      }
+    ],
+    "orders": [
+      {
+        "id": "order-0000",
+        "sku": "A",
+        "quantity": 4,
+        "due_day": 5,
+        "priority": 4
+      },
+      {
+        "id": "order-0001",
+        "sku": "B",
+        "quantity": 6,
+        "due_day": 2,
+        "priority": 2
+      },
+      {
+        "id": "order-0002",
+        "sku": "C",
+        "quantity": 8,
+        "due_day": 6,
+        "priority": 3
+      },
+      {
+        "id": "order-0003",
+        "sku": "A",
+        "quantity": 8,
+        "due_day": 3,
+        "priority": 2
+      },
+      {
+        "id": "order-0004",
+        "sku": "B",
+        "quantity": 12,
+        "due_day": 5,
+        "priority": 1
+      },
+      {
+        "id": "order-0005",
+        "sku": "C",
+        "quantity": 11,
+        "due_day": 4,
+        "priority": 4
+      }
+    ],
+    "policy": {
+      "substitutions": {
+        "A": [
+          "A-alt"
+        ],
+        "B": [
+          "B-alt"
+        ],
+        "C": [
+          "C-alt"
+        ]
+      },
+      "allow_late": true,
+      "late_penalty": 20,
+      "substitution_penalty": 8,
+      "disruption_penalty": 3,
+      "unfilled_penalty": 500
+    }
+  },
+  "batches": [
+    {
+      "event_id": "stock_loss-event-1",
+      "updates": [
+        {
+          "entity": "supply:stock-A",
+          "field": "quantity",
+          "value": 0,
+          "source": "SYNTHETIC stock_loss confirmation 1; seed=1729"
+        },
+        {
+          "entity": "supply:stock-B",
+          "field": "quantity",
+          "value": 0,
+          "source": "SYNTHETIC stock_loss confirmation 1; seed=1729"
+        },
+        {
+          "entity": "supply:stock-C",
+          "field": "quantity",
+          "value": 0,
+          "source": "SYNTHETIC stock_loss confirmation 1; seed=1729"
+        }
+      ]
+    },
+    {
+      "event_id": "stock_loss-event-2",
+      "updates": [
+        {
+          "entity": "supply:stock-A",
+          "field": "quantity",
+          "value": 1,
+          "source": "SYNTHETIC stock_loss confirmation 2; seed=1729"
+        },
+        {
+          "entity": "supply:stock-B",
+          "field": "quantity",
+          "value": 2,
+          "source": "SYNTHETIC stock_loss confirmation 2; seed=1729"
+        },
+        {
+          "entity": "supply:stock-C",
+          "field": "quantity",
+          "value": 2,
+          "source": "SYNTHETIC stock_loss confirmation 2; seed=1729"
+        }
+      ]
+    },
+    {
+      "event_id": "stock_loss-event-3",
+      "updates": [
+        {
+          "entity": "supply:stock-A",
+          "field": "quantity",
+          "value": 2,
+          "source": "SYNTHETIC stock_loss confirmation 3; seed=1729"
+        },
+        {
+          "entity": "supply:stock-B",
+          "field": "quantity",
+          "value": 3,
+          "source": "SYNTHETIC stock_loss confirmation 3; seed=1729"
+        },
+        {
+          "entity": "supply:stock-C",
+          "field": "quantity",
+          "value": 3,
+          "source": "SYNTHETIC stock_loss confirmation 3; seed=1729"
+        }
+      ]
+    }
+  ]
+}

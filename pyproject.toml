@@ -4,18 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "assumption-ops"
-version = "0.4.0"
+version = "0.5.0"
 description = "Evidence-backed supplier exception planning with bounded ATMS reasoning and integer allocation"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["scipy>=1.11,<2"]
 
 [project.optional-dependencies]
+datasets = ["access-parser==0.0.6"]
 dev = ["pytest>=8,<10", "ruff>=0.9,<1", "nbformat>=5.10,<6", "nbclient>=0.10,<1", "ipykernel>=6,<8"]
 
 [project.scripts]
 assumption-ops = "assumption_ops.cli:main"
 assumption-ops-replay = "assumption_ops.replay_cli:main"
+assumption-ops-pilot = "assumption_ops.pilot_cli:main"
+assumption-ops-warehouse = "assumption_ops.warehouse_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

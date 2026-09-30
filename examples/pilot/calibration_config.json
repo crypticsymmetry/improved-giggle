@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "scoring_weights": {
+    "disruption_penalty": 3,
+    "late_penalty": 20,
+    "substitution_penalty": 8,
+    "unfilled_penalty": 500
+  },
+  "candidates": [
+    {
+      "name": "low_penalties",
+      "late_penalty": 0,
+      "substitution_penalty": 0,
+      "disruption_penalty": 0,
+      "unfilled_penalty": 0
+    },
+    {
+      "name": "balanced",
+      "late_penalty": 20,
+      "substitution_penalty": 8,
+      "disruption_penalty": 3,
+      "unfilled_penalty": 500
+    },
+    {
+      "name": "service_first",
+      "late_penalty": 40,
+      "substitution_penalty": 8,
+      "disruption_penalty": 1,
+      "unfilled_penalty": 1500
+    }
+  ],
+  "constraints": {
+    "min_fill_rate": 0.0,
+    "max_late_rate": 1.0
+  }
+}

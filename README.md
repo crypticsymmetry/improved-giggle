@@ -475,3 +475,166 @@ explicitly confirmed revisions in this format. Calibrate all penalties in
 consistent units and compare final service, shortages, adaptation and review
 counts by case. The next integration should consume these local reports and
 explicit approvals before dispatching an external action.
+
+
+## v0.5: pilot intake and holdout policy calibration
+
+[**Run pilot calibration in Google Colab**](https://colab.research.google.com/github/crypticsymmetry/improved-giggle/blob/main/notebooks/pilot_calibration.ipynb)
+
+The pilot workflow accepts a directory containing a manifest and reusable replay
+cases. Episodes are assigned explicitly to `calibration` or `holdout`; their
+`group_id` keeps related business episodes together. The loader rejects groups
+that appear in both splits and identical business traces renamed or relabeled
+across splits. Input provenance remains explicit. The included pilot is synthetic;
+no actual historical business dataset is bundled or inferred.
+
+```bash
+python -m pip install -e '.[dev]'
+assumption-ops-pilot --manifest examples/pilot/pilot.json --validate-only
+assumption-ops-pilot --manifest examples/pilot/pilot.json \
+  --config examples/pilot/calibration_config.json --output-dir pilot_results
+```
+
+Validation does not run the solver. Calibration evaluates every configured
+penalty candidate on calibration episodes, selects one policy, and then evaluates
+only that selected policy and the existing baseline on holdout episodes. The
+holdout report can show a regression or failed service constraint; it never
+silently chooses a different policy from holdout performance.
+
+**Candidate objective values are not comparable across different penalty weights.**
+Every candidate is independently verified under its own optimization policy, then
+rescored with the same explicit `scoring_weights`. Selection minimizes the mean
+final fixed score per requested unit across calibration episodes, subject to the
+configured final fill and late-rate constraints on every calibration episode.
+Empty-demand episodes use denominator one, fill rate one and late rate zero.
+This gives each episode equal weight rather than letting the largest case dominate.
+It is a constrained policy search with supplied business values, not automatic
+inference of true costs or proof of financial savings.
+
+All candidates preserve each case's substitution eligibility and `allow_late`
+setting. They vary only lateness, substitution, disruption and shortage penalties.
+For each episode, a single initial allocation is solved using the fixed scoring
+weights, and all updated candidate and baseline snapshots use that common
+reference. Baseline plans use the episode's original penalty weights. Initial
+plans have no disruption reference; subsequent plans use the fixed initial one.
+The objective comparison therefore describes provisional snapshot planning,
+not independently executing strategies with their own reservation histories.
+All solves must report optimal status for a calibration result to be produced.
+
+Policy-configuration events are rejected in pilot episodes so events cannot
+silently overwrite the search policy. Confirmed facts on existing supply and
+order entities can still change chronologically. No approval, commit, inventory
+reservation or external action occurs. Final service and cost are measured once
+per episode; repeated snapshots are not counted as additional demand.
+
+The pilot manifest has this versioned structure:
+
+```json
+{
+  "schema_version": 1,
+  "name": "my offline pilot",
+  "episodes": [
+    {"episode_id": "period-1", "group_id": "account-period-1",
+     "split": "calibration", "case_path": "case-001.json"},
+    {"episode_id": "period-2", "group_id": "account-period-2",
+     "split": "holdout", "case_path": "case-002.json"}
+  ]
+}
+```
+
+Case paths must stay within the manifest directory; absolute paths, directory
+traversal and symlink escapes are rejected. Each case uses the v0.4 replay schema.
+Both splits must be nonempty and episode IDs must be unique. Group labels are
+caller supplied: the loader cannot detect undisclosed relationships between
+otherwise different traces. A caller's `synthetic: false` label does not establish
+that a file is authentic production history.
+
+Calibration configuration requires `schema_version: 1`, `scoring_weights`
+containing all four integer penalties, and a nonempty `candidates` array. Every
+candidate supplies a unique name and all four penalties. Optional `constraints`
+contains `min_fill_rate` and `max_late_rate`, each a finite number in [0, 1].
+Constraints apply to final units requested, with late units divided by requested
+units. The CLI writes a dataset summary, complete calibration/holdout JSON and
+spreadsheet-safe calibration ranking CSV. Holdout results remain diagnostic and
+are separate from candidate ranking. Filesystem report writes are local writes,
+not a distributed transaction.
+
+A practical pilot starts by selecting disjoint business periods or accounts,
+exporting their starting planning snapshots and explicitly confirmed revisions,
+and documenting the units and rationale for fixed business penalties and service
+bounds. Inspect the holdout report before using the selected settings operationally.
+The framework does not infer chronological split boundaries, tune business
+weights from holdout data, or dispatch orders.
+
+
+## Public industrial data and allocation-method comparison
+
+[**Run the real warehouse benchmark in Colab**](https://colab.research.google.com/github/crypticsymmetry/improved-giggle/blob/main/notebooks/real_warehouse_benchmark.ipynb)
+
+The public source is **Dynamic storage assignment in homogeneous dual-access
+deep-lane S/R systems: Dataset**, by Gabriele Sirri, Riccardo Accorsi, Giacomo Lupi
+and Riccardo Manzini (2026), [DOI 10.5281/zenodo.18229759](https://doi.org/10.5281/zenodo.18229759),
+[Zenodo record](https://zenodo.org/records/18229759), CC BY 4.0. The authors describe
+an industrial food-and-beverage case with a 130-day horizon, production quantities,
+daily demand, and initial inventory. Our conversion adapts those data into a SKU
+allocation problem; it does not reproduce the original storage-assignment model.
+
+```bash
+python -m pip install -e '.[dev,datasets]'
+assumption-ops-warehouse --download --allow-inferred-demand \
+  --stock-fractions 1.0 0.5 --output-dir warehouse_results
+```
+
+The downloaded Access file is pinned to SHA-256
+`4db26e1552f495f840e5c61e5d80fc7ed51bd28e1af6e10bd04b606d164f4548`.
+The adapter verifies the checksum, item catalogs and data invariants before using
+its quantities. `access-parser==0.0.6` is an optional pure-Python reader; the core
+framework remains usable without it. Native table exports were independently
+checked with MDB Tools during adapter development.
+
+**This benchmark is provisional because the published D table has mismatched
+field roles.** In that table, the named `Q` column contains values matching SKU
+codes and the named `item_WEEK` column contains apparent numeric quantities.
+Both Access readers agree on the stored values; the adapter validates SKU catalog
+membership and identifier prefixes across all rows, but the authors have not
+confirmed our interpretation. Reading the dataset fails by default. The explicit
+`--allow-inferred-demand` flag acknowledges the documented mapping; it does not
+turn that interpretation into independently verified demand semantics. Every
+report retains this limitation and the physical-to-modeled field mapping.
+
+The projection aggregates demand by SKU/day, production into dated supply lots,
+and initial inventory by SKU. Production day is treated as availability day;
+demand day is treated as requested due day. Acquisition costs are zero because
+purchase costs are absent; lateness/shortage penalties are illustrative. No
+substitution relationships, customer priorities, lane geometry, batch compatibility,
+warehouse capacity or holding costs are inferred. All methods see the same full
+horizon, so this is an **offline planning benchmark**, not an online forecast or
+an estimate of realized business outcomes.
+
+The comparison reports independently validated integer allocations from MILP,
+earliest-due-date allocation, and priority/cost greedy allocation. A separate
+continuous LP solves the same objective and resource balance to provide a lower
+bound only after an optimal LP result; no unvalidated fractional plan is described
+as executable. Solver statuses, objective gaps, service metrics and wall times
+remain explicit. This pure transportation formulation has integral structure,
+so LP/MILP ties are expected. A tie is evidence against claiming a unique MILP
+advantage on these inputs.
+
+A stock fraction of one uses the projected source quantities. Fractions below
+one scale both initial inventory and production quantities downward with integer
+rounding. They are **modeled supply stress**, not observed stock losses or supplier
+delays. Reports separate these runs and export full allocation JSON, method CSV,
+and a compact provenance-aware summary. No source database is redistributed in
+git; the checksum-pinned downloader reproduces it locally.
+
+
+A measured development run is retained in
+[`examples/warehouse_benchmark_summary.json`](examples/warehouse_benchmark_summary.json),
+including source checksums, exact weights, run settings, solver statuses and
+machine-specific timings. All methods filled 25,686 interpreted demand units on
+time in the native projection (score zero). With all projected supply reduced to
+50%, MILP allocated 18,366 units on time versus 17,305 for both greedy methods;
+all had 5,126 unfilled units. Weighted scores were 5,544,350 and 6,056,700,
+respectively. LP matched MILP at every tested supply fraction (1, .75, .5, .25).
+These are results of the documented provisional projection and modeled stress,
+not measured improvements to the original industrial operation.
