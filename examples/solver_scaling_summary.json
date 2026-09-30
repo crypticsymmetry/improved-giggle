@@ -1,0 +1,145 @@
+{
+  "synthetic": true,
+  "external_dispatch": false,
+  "environment": {
+    "python": "3.12.14",
+    "scipy": "1.17.0",
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.39"
+  },
+  "methodology": [
+    "Both solvers warmed outside timing; execution order alternates between pairs.",
+    "Identical inputs, eligibility and objective weights; no previous allocation.",
+    "Parity means independently feasible plans with proven optimal equal scores, not equal arcs.",
+    "Timing summaries exclude pairs without proven equal quality.",
+    "Ratios of medians are descriptive for this machine and synthetic workload, not guarantees.",
+    "Backend time includes its internal validation; external accounting is untimed."
+  ],
+  "summary": [
+    {
+      "orders": 25,
+      "seeds": 3,
+      "repeats_per_seed": 3,
+      "verified_pairs": 9,
+      "unverified_pairs": 0,
+      "milp_median_seconds": 0.0016383799993491266,
+      "lp_median_seconds": 0.002322980999451829,
+      "ratio_milp_to_lp_medians": 0.7052920362825814
+    },
+    {
+      "orders": 100,
+      "seeds": 3,
+      "repeats_per_seed": 3,
+      "verified_pairs": 9,
+      "unverified_pairs": 0,
+      "milp_median_seconds": 0.005950310000116588,
+      "lp_median_seconds": 0.00598586200067075,
+      "ratio_milp_to_lp_medians": 0.9940606715373361
+    },
+    {
+      "orders": 500,
+      "seeds": 3,
+      "repeats_per_seed": 3,
+      "verified_pairs": 9,
+      "unverified_pairs": 0,
+      "milp_median_seconds": 0.14057023900022614,
+      "lp_median_seconds": 0.10094238400051836,
+      "ratio_milp_to_lp_medians": 1.3925789487942377
+    },
+    {
+      "orders": 1000,
+      "seeds": 3,
+      "repeats_per_seed": 3,
+      "verified_pairs": 9,
+      "unverified_pairs": 0,
+      "milp_median_seconds": 0.5868764330007252,
+      "lp_median_seconds": 0.3559847209999134,
+      "ratio_milp_to_lp_medians": 1.6486000616887937
+    }
+  ],
+  "input_fingerprints": [
+    {
+      "orders": 25,
+      "supplies": 16,
+      "seed": 1729,
+      "eligible_arcs": 50,
+      "sha256": "9bc98cee292b8dc0aa99521786ddb2daa547e40dc285325b6a6a74db7bd420b7"
+    },
+    {
+      "orders": 25,
+      "supplies": 16,
+      "seed": 1730,
+      "eligible_arcs": 50,
+      "sha256": "1518abda34c6814a0c068a3b14cf87748db0aae1d13ce2f93090b9ad5f92178c"
+    },
+    {
+      "orders": 25,
+      "supplies": 16,
+      "seed": 1731,
+      "eligible_arcs": 50,
+      "sha256": "916c55836f1cc44c9a748db6ae5e709e80a52686292c3fe4969bc6a234ac12fe"
+    },
+    {
+      "orders": 100,
+      "supplies": 33,
+      "seed": 1729,
+      "eligible_arcs": 413,
+      "sha256": "580eaa4f1fff2fed62bf7141a12543de13cfc94e31bc7a30fd9990f2d0081efb"
+    },
+    {
+      "orders": 100,
+      "supplies": 33,
+      "seed": 1730,
+      "eligible_arcs": 413,
+      "sha256": "9a2541dfa9e470118610d4d19ce77174e47bccdfdda735b022e70e068833c4df"
+    },
+    {
+      "orders": 100,
+      "supplies": 33,
+      "seed": 1731,
+      "eligible_arcs": 413,
+      "sha256": "7a08cf8c394567000013857f1f837a7a4dd5a8bf01b566931ba0afbdd1aee327"
+    },
+    {
+      "orders": 500,
+      "supplies": 166,
+      "seed": 1729,
+      "eligible_arcs": 10380,
+      "sha256": "ac246808962d319792a3d55e3ea98284cd8ec00d42da4a74aad1b435594d5879"
+    },
+    {
+      "orders": 500,
+      "supplies": 166,
+      "seed": 1730,
+      "eligible_arcs": 10380,
+      "sha256": "cca1a5d41df1ef6445699f763414579bb5c3bfee9376e010293cf53497fb07fd"
+    },
+    {
+      "orders": 500,
+      "supplies": 166,
+      "seed": 1731,
+      "eligible_arcs": 10380,
+      "sha256": "eba9154ece95a9a4966ff7ad3aebef0b61e41e83c9bb3099c1cb20766e86d185"
+    },
+    {
+      "orders": 1000,
+      "supplies": 333,
+      "seed": 1729,
+      "eligible_arcs": 41628,
+      "sha256": "f72cc6170bcdcdf2fe14e41367a5c2d6c267294a49acb21283fd685af92f5230"
+    },
+    {
+      "orders": 1000,
+      "supplies": 333,
+      "seed": 1730,
+      "eligible_arcs": 41628,
+      "sha256": "91b939f66161329006cf0b90ff7eb03e1cad131f7d2adfe48ef1da2072a2bb9b"
+    },
+    {
+      "orders": 1000,
+      "supplies": 333,
+      "seed": 1731,
+      "eligible_arcs": 41628,
+      "sha256": "a74a91935f54f7700a71d2d33017de914780585d84fa093672d041d33a3467cf"
+    }
+  ]
+}

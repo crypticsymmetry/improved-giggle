@@ -169,7 +169,7 @@ def validate_plan(
         raise ValueError("objective must be finite")
 
 
-def optimize(
+def _optimize_milp(
     supplies: Sequence[Supply],
     orders: Sequence[Order],
     policy: Policy,
@@ -284,3 +284,42 @@ def optimize(
     except ValueError as exc:
         raise RuntimeError(f"allocation solver returned an infeasible solution: {exc}") from exc
     return plan
+
+
+def optimize(
+    supplies: Sequence[Supply],
+    orders: Sequence[Order],
+    policy: Policy,
+    previous: Plan | None = None,
+    *,
+    time_limit: float = 30.0,
+    solver: str = "milp",
+) -> Plan:
+    """Solve with an explicitly chosen backend and independently verify results.
+
+    ``milp`` retains the original integer model, including prior-plan stability.
+    ``lp`` supports this transportation model without a prior allocation only.
+    ``auto`` uses LP in that supported case and falls back to MILP if the LP
+    cannot return a verified integer plan. Prior allocations route directly to
+    MILP. Invalid caller inputs are never converted into fallback attempts.
+    """
+    _validate_inputs(supplies, orders, policy)
+    if (
+        isinstance(time_limit, bool)
+        or not isinstance(time_limit, (int, float))
+        or not isfinite(time_limit)
+        or time_limit <= 0
+    ):
+        raise ValueError("time_limit must be finite and positive")
+    if solver not in ("milp", "lp", "auto"):
+        raise ValueError("solver must be milp, lp, or auto")
+    if solver == "milp" or (solver == "auto" and previous is not None):
+        return _optimize_milp(supplies, orders, policy, previous, time_limit=time_limit)
+    from .transport import LPPlanError, optimize_lp
+
+    if solver == "lp":
+        return optimize_lp(supplies, orders, policy, previous, time_limit=time_limit)
+    try:
+        return optimize_lp(supplies, orders, policy, time_limit=time_limit)
+    except LPPlanError:
+        return _optimize_milp(supplies, orders, policy, time_limit=time_limit)

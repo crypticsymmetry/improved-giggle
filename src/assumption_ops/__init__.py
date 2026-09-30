@@ -19,6 +19,8 @@ from .pilot import (
 )
 from .replay import ReplayBatch, ReplayCase, run_replay
 from .scenarios import Scenario, ScenarioComparison, ScenarioOutcome, compare_scenarios
+from .scaling import benchmark_solvers
+from .transport import LPPlanError, optimize_lp, supports_lp
 from .warehouse_data import (
     WarehouseData,
     WarehouseRecord,
@@ -28,6 +30,10 @@ from .warehouse_data import (
 )
 
 __all__ = [
+    "benchmark_solvers",
+    "LPPlanError",
+    "optimize_lp",
+    "supports_lp",
     "compare_allocators",
     "WarehouseData",
     "WarehouseRecord",

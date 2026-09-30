@@ -638,3 +638,73 @@ all had 5,126 unfilled units. Weighted scores were 5,544,350 and 6,056,700,
 respectively. LP matched MILP at every tested supply fraction (1, .75, .5, .25).
 These are results of the documented provisional projection and modeled stress,
 not measured improvements to the original industrial operation.
+
+
+## v0.6: verified LP transport backend and paired scaling measurements
+
+[**Run solver scaling in Colab**](https://colab.research.google.com/github/crypticsymmetry/improved-giggle/blob/main/notebooks/solver_scaling.ipynb)
+
+`optimize` now accepts an explicit backend. The default remains `milp` to preserve
+existing behavior, including allocation tie-breaking and prior-plan stability.
+
+```python
+from assumption_ops import optimize, evaluate_plan
+
+integer_plan = optimize(supplies, orders, policy, solver="lp")
+evaluate_plan(supplies, orders, policy, integer_plan)
+# Automatic selection handles supported LP failures and unsupported prior plans:
+revised = optimize(supplies, orders, policy, previous=integer_plan, solver="auto")
+```
+
+The specialized LP backend supports the current one-for-one transportation model
+with integer quantities and **no previous allocation**. It indexes eligible lots
+by SKU and builds sparse capacity and exact demand-balance matrices. HiGHS dual
+simplex solves the continuous formulation. An integral transport polytope makes
+integer vertices possible, but solver output is still checked independently:
+finite quantities, near-integrality, exact integer capacity/demand feasibility,
+objective reconstruction and accounting. Fractional incumbents are rejected, not
+arbitrarily rounded. Claimed optimal integer objectives must match the LP result
+with an absolute tolerance; a large total cannot conceal rounding differences
+through a relative tolerance.
+
+Explicit `lp` with a previous plan raises `ValueError`; this version does not
+implement prior-plan L1 stability in LP. `auto` routes prior-plan requests to
+MILP, otherwise tries LP and catches only `LPPlanError` for a MILP fallback.
+Malformed caller input is rejected before dispatch. A verified time-limited
+integer incumbent retains `feasible_limit` status; it is not called optimal.
+The LP backend fails closed if quantities, coefficients or its conservative
+worst-case objective exceed the exact floating-point integer range. Automatic
+fallback uses the existing MILP implementation and its existing numerical limits.
+`OperationsPipeline` continues using its unchanged default MILP path; this is an
+explicit stateless backend option, not an automatic change to existing workflows.
+
+```bash
+python -m pip install -e '.[dev]'
+assumption-ops-solvers --orders 25 100 500 1000 --seeds 1729 1730 1731 \
+  --repeats 3 --output-dir solver_results
+```
+
+The scaling runner warms both backends outside measured runs, alternates execution
+order, and retains paired input fingerprints, statuses, objectives, metrics and
+wall times. It independently checks feasibility and accounting after each timed
+call. Allocation arcs may differ under ties; equivalent quality means equal
+proven-optimal objective values on identical inputs. Pairs without proven equal
+quality are retained in raw reports but excluded from timing summaries. Both
+backends are supplied the same time limit per attempt; `auto` fallback may consume
+a second solver attempt and therefore is not a combined wall-time SLA.
+
+The measured development run in
+[`examples/solver_scaling_summary.json`](examples/solver_scaling_summary.json)
+contains 36 verified pairs across four sizes, three seeds and three repetitions.
+At 500 orders, medians were approximately 141 ms MILP and 101 ms LP; at 1,000
+orders, 587 ms and 356 ms. At 25 orders MILP was faster, and 100 orders were close.
+These synthetic workloads measure this machine and implementation, not production
+latency or guaranteed speedups. The CLI exports full JSON and per-run CSV records.
+
+Public data investigation is recorded in
+[`docs/data_source_audit.md`](docs/data_source_audit.md). No newly investigated
+source was admitted as verified observed inventory plus uncensored demand. The
+existing warehouse projection retains its provisional flag. The next data adapter
+requires documented inventory timing and receipt/order semantics; snapshots,
+sales and stockout flags will not be converted into fictional receipts or latent
+demand.
