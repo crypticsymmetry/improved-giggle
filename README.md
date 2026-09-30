@@ -769,3 +769,19 @@ scores **4,040** in configured penalty units. This verifies the comparison path
 and demonstrates opportunity cost under the fixture's assumptions; it is not
 measured business savings. Use actual order/backlog exports, timestamped physical
 movements and reconciled inventory snapshots to obtain operational evidence.
+
+### Preparing actual exports
+
+```bash
+assumption-ops-business --init-dir business_export
+# Fill business_export/*.csv, manifest.json and policy.json from documented sources.
+assumption-ops-business --manifest business_export/manifest.json --validate-only
+assumption-ops-business --manifest business_export/manifest.json --output-dir business_results
+```
+
+The initializer refuses existing destinations and creates header-only CSVs plus
+`DATA_REQUEST.md` for the data owner. Provenance and policy settings remain null
+until explicitly supplied, so an unfilled template cannot generate evaluation
+results. The [business-pilot notebook](notebooks/business_pilot.ipynb) now includes
+a template ZIP and a separate `REAL_MANIFEST` section for completed uploads.
+Until actual records are supplied, actual-data evaluation remains pending.

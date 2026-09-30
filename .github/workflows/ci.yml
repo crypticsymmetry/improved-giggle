@@ -31,3 +31,4 @@ jobs:
       - run: assumption-ops-solvers --orders 10 --seeds 1729 --repeats 1 --output-dir /tmp/solver-results > /tmp/solvers.json
       - run: assumption-ops-business --manifest examples/business_pilot/manifest.json --validate-only > /tmp/business-input.json
       - run: assumption-ops-business --manifest examples/business_pilot/manifest.json --output-dir /tmp/business-results > /tmp/business.json
+      - run: assumption-ops-business --init-dir /tmp/business-export-template > /tmp/business-template.json

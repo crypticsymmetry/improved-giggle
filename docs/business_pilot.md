@@ -69,3 +69,25 @@ Each snapshot compares MILP, verified LP, earliest-due-date, and priority/cost g
 Snapshot results are repeated current-state decisions. Do not sum their requested/allocated units as newly arriving demand or fulfilled sales; the same backlog can appear at several cutoffs. No returned plan is committed, reserved, or dispatched. Timings depend on the machine and workload. Weighted penalties are business assumptions until their economic meanings are validated.
 
 For a genuine pilot, agree on column semantics with the data owner, reconcile a complete movement ledger, inspect late observations, and compare methods across representative episodes. Tune policy weights only on calibration groups and evaluate once on independent holdout groups. Retrospective snapshots can assess feasibility and modeled decisions; they do not measure causal fulfillment improvements because alternative allocations can change subsequent inventory and order histories.
+
+## Requesting actual exports
+
+Create a new unfilled bundle without copying the synthetic observations:
+
+```bash
+assumption-ops-business --init-dir /path/to/new/business_export
+```
+
+The destination must not already exist. The command creates the four CSV headers,
+manifest, policy file, and a concrete `DATA_REQUEST.md` for the data owner. It does
+not fetch records or run a solver. The provenance flag and policy fields are
+`null` so they must be set explicitly; validation rejects the unfilled template.
+Fill the episode/group identifier as well. Customer identities and contact or
+payment information are unnecessary; stable pseudonymous identifiers suffice.
+
+The final two sections of `business_pilot.ipynb` create a downloadable template
+ZIP and provide a separate `REAL_MANIFEST` path for uploaded records. Keep the
+synthetic demo assertions unchanged; actual records use a separate comparison
+without hard-coded expected scores. The generated request explains the exact
+semantics and source-completeness information needed from the data owner. Review
+it before sharing; no message is sent by the framework.
