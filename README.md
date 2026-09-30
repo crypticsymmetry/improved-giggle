@@ -867,3 +867,49 @@ and 8: first-snapshot MILP scores are 60, 40, 10 and 0 respectively; at eight
 machines all baselines also score 0. These are results for this projection, not
 held-out generalization or a comparison against Google's scheduler. Exact tied
 assignments and later migration costs can vary with solver versions.
+
+
+### v0.9: job-disjoint, multi-window evaluation
+
+The [new Colab evaluation notebook](https://colab.research.google.com/github/crypticsymmetry/improved-giggle/blob/main/notebooks/google_cluster_holdout.ipynb)
+checks whether the first example's placement advantage persists across other
+submission windows and job groups. It uses the same verified 4.5 MB public files;
+no private data is needed.
+
+```bash
+assumption-ops-cluster --holdout --machines-grid 1 2 4 8 --tasks 64 \
+  --time-limit 5 --output-dir cluster_holdout_results
+```
+
+The fixed protocol contains one development window, one validation window and
+six later holdout windows, each five minutes long. It is defined before solving.
+The first 64 complete eligible task identities reserve each cohort's slots, and
+all admitted job IDs are excluded from every subsequent cohort, including jobs
+whose tasks terminate before the cutoff. This prevents resubmissions and related
+tasks from crossing the split. Empty active cohorts remain visible in JSON and
+are excluded from comparison denominators. Every case starts without a prior
+plan; these comparisons evaluate admission/packing rather than migration.
+
+The [evaluation contract](docs/google_cluster_holdout.md) documents selection,
+weights, statuses and aggregation. No hyperparameter calibration or method/grid
+selection uses the holdout scores. Later cohorts share one trace shard and machine
+pool, so they are not statistically independent external validation. The earlier
+development region was already explored; this is a reproducible extension,
+not a preregistered study.
+
+Checked source results are preserved in
+[`examples/google_cluster_holdout_summary.json`](examples/google_cluster_holdout_summary.json):
+
+| Comparison against MILP | Holdout cases | MILP better | Tie | MILP worse | Mean score difference / total priority |
+|---|---:|---:|---:|---:|---:|
+| Priority first fit | 20 | 4 | 16 | 0 | 0.1833% |
+| Best fit | 20 | 3 | 17 | 0 | 0.1402% |
+
+Five of six holdout cohorts had active tasks, yielding 20 configurations; the
+remaining cohort is explicitly reported empty. All 20 holdout MILP solves reached
+optimal status. All four validation configurations tied. With no prior plan,
+stability-aware best fit equals ordinary best fit and adds no independent evidence.
+The original development example showed larger improvements than these later
+cohorts. The observed benefit is workload dependent; greedy methods are already
+optimal in most of this bounded evaluation. Means weight cases equally, include
+ties, and do not represent percentage savings or cumulative completed work.

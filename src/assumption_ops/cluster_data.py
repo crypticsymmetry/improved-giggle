@@ -8,6 +8,7 @@ and overcommit behavior are deliberately outside this hard-reservation model.
 from __future__ import annotations
 
 import csv
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_FLOOR
 import gzip
@@ -146,6 +147,9 @@ def read_cluster_snapshot(
     max_machines: int = 8,
     max_tasks: int = 64,
     verify_checksums: bool = True,
+    cohort_start_us: int = COHORT_START_US,
+    cohort_end_us: int | None = None,
+    excluded_job_ids: Sequence[str] = (),
 ) -> ClusterSnapshot:
     """Project a bounded new-submission cohort using only events by ``cutoff_us``.
 
@@ -153,6 +157,10 @@ def read_cluster_snapshot(
     requests or unsupported/unknown different-machine restrictions quarantine a
     task. Updates never borrow later values. Terminal events remove selected work;
     schedule/eviction events do not simulate execution or release modeled capacity.
+    A bounded admission window uses complete SUBMIT records in [start, end).
+    Selected identities continue replaying through the cutoff, including exits.
+    Excluded jobs never occupy slots; reserved slots and their jobs remain in
+    provenance after a task exits or is quarantined.
     """
     for name, value in (
         ("cutoff_us", cutoff_us),
@@ -165,6 +173,28 @@ def read_cluster_snapshot(
         raise ValueError("Snapshot bound exceeds 100000")
     if not isinstance(verify_checksums, bool):
         raise ValueError("verify_checksums must be boolean")
+    if (
+        isinstance(cohort_start_us, bool)
+        or not isinstance(cohort_start_us, int)
+        or not COHORT_START_US <= cohort_start_us <= cutoff_us
+    ):
+        raise ValueError("cohort_start_us must be an integer between trace start and cutoff")
+    if cohort_end_us is not None and (
+        isinstance(cohort_end_us, bool)
+        or not isinstance(cohort_end_us, int)
+        or not cohort_start_us < cohort_end_us <= cutoff_us
+    ):
+        raise ValueError("cohort_end_us must be an integer after start and at or before cutoff")
+    if isinstance(excluded_job_ids, (str, bytes)) or not isinstance(excluded_job_ids, Sequence):
+        raise ValueError("excluded_job_ids must be a sequence of distinct canonical job IDs")
+    excluded = set()
+    for value in excluded_job_ids:
+        if not isinstance(value, str):
+            raise ValueError("Excluded job IDs must be canonical unsigned numeric strings")
+        job_id = _integer(value, "excluded job ID")
+        if str(job_id) != value or job_id in excluded:
+            raise ValueError("Excluded job IDs must be distinct canonical unsigned numeric strings")
+        excluded.add(job_id)
     paths = {"machines": Path(machine_path), "tasks": Path(task_path)}
     hashes = {}
     for name, path in paths.items():
@@ -245,6 +275,8 @@ def read_cluster_snapshot(
                     machines[identity] = Machine(str(identity), cpu, memory)
                     stats["rounded_capacity_values"] += rc + rm
             else:
+                if job in excluded:
+                    continue
                 complete = (
                     not row[1]
                     and row[12] == "0"
@@ -253,7 +285,12 @@ def read_cluster_snapshot(
                     and cpu > 0
                     and memory > 0
                 )
-                if event == 0 and COHORT_START_US <= timestamp:
+                in_window = cohort_start_us <= timestamp and (
+                    cohort_end_us is None or timestamp < cohort_end_us
+                )
+                if cohort_end_us is not None and event == 0 and not in_window:
+                    continue
+                if event == 0 and in_window:
                     submitted.add(identity)
                 if event in (3, 4, 5, 6):
                     if identity in selected:
@@ -265,7 +302,10 @@ def read_cluster_snapshot(
                             selected[identity] = None
                         stats["quarantined_task_records"] += 1
                         stats["unsupported_restriction_records"] += row[12] != "0"
-                    elif identity in selected or len(selected) < max_tasks:
+                    elif identity in selected or (
+                        len(selected) < max_tasks
+                        and (cohort_end_us is None or (event == 0 and in_window))
+                    ):
                         selected[identity] = Task(f"{job}:{index}", cpu, memory, priority + 1)
                         stats["rounded_request_values"] += rc + rm
         prefixes[kind] = prefix.hexdigest()
@@ -281,8 +321,15 @@ def read_cluster_snapshot(
         "source": "Google clusterdata-2011-2",
         "license": "CC BY 4.0",
         "cutoff_us": cutoff_us,
-        "cohort_start_us": COHORT_START_US,
-        "cohort_policy": "First eligible task identities; terminal exits do not refill cohort slots.",
+        "cohort_start_us": cohort_start_us,
+        "cohort_end_us": cohort_end_us,
+        "excluded_job_ids": [str(job) for job in sorted(excluded)],
+        "cohort_policy": (
+            "First complete eligible SUBMIT identities in [cohort_start_us, cohort_end_us); "
+            "updates replay admitted slots through cutoff; terminal exits do not refill slots."
+            if cohort_end_us is not None
+            else "First eligible task identities; terminal exits do not refill cohort slots."
+        ),
         "max_machines": max_machines,
         "max_tasks": max_tasks,
         "resource_scale": RESOURCE_SCALE,
@@ -294,6 +341,8 @@ def read_cluster_snapshot(
         ).hexdigest(),
         "selected_machine_ids": [m.id for m in machine_values],
         "selected_task_ids": [t.id for t in task_values],
+        "cohort_task_ids": [f"{job}:{index}" for job, index in selected],
+        "selected_job_ids": [str(job) for job in sorted({job for job, _ in selected})],
         "task_shard_last_finite_us": last_finite,
         "counts": stats,
         "assumptions": [

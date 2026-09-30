@@ -33,3 +33,4 @@ jobs:
       - run: assumption-ops-business --manifest examples/business_pilot/manifest.json --output-dir /tmp/business-results > /tmp/business.json
       - run: assumption-ops-business --init-dir /tmp/business-export-template > /tmp/business-template.json
       - run: assumption-ops-cluster --machines 2 --tasks 16 --cutoffs-us 900000000 --output-dir /tmp/cluster-results > /tmp/cluster.json
+      - run: assumption-ops-cluster --holdout --machines-grid 1 2 --tasks 16 --time-limit 5 --output-dir /tmp/cluster-holdout-results > /tmp/cluster-holdout.json

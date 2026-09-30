@@ -16,6 +16,7 @@ from .business_io import load_business_pilot, write_business_csv
 from .business_template import create_business_template
 from .cluster_benchmark import run_cluster_benchmark, write_cluster_csv
 from .cluster_data import ClusterSnapshot, download_cluster, read_cluster_snapshot
+from .cluster_holdout import Window, DEFAULT_WINDOWS, run_cluster_holdout, write_cluster_holdout_csv
 from .calibration import PenaltyCandidate, calibrate
 from .evidence import EvidenceConflict, EvidenceStore, JsonExtractor
 from .events import EvidenceUpdate, UpdateReceipt, StaleSnapshotError, IdempotencyConflict
@@ -55,6 +56,10 @@ from .warehouse_data import (
 )
 
 __all__ = [
+    "Window",
+    "DEFAULT_WINDOWS",
+    "run_cluster_holdout",
+    "write_cluster_holdout_csv",
     "ClusterSnapshot",
     "download_cluster",
     "read_cluster_snapshot",

@@ -275,3 +275,122 @@ def test_actual_pinned_source_when_available():
     assert 0 < len(result.tasks) <= 64
     assert result.metadata["counts"]["machine_rows"] == 37780
     assert result.metadata["counts"]["task_rows"] == 450146
+
+
+def test_bounded_admission_edges_and_updates_after_window(tmp_path):
+    rows = [
+        task(START, job=1),
+        task(START + 1, job=2),
+        task(START + 2, job=3),
+        task(START + 3, job=4),
+        task(START + 4, job=2, event=7, cpu="0.4"),
+        task(START + 10, job=999, event=4),
+    ]
+    result = snapshot(tmp_path, tasks=rows, cohort_start_us=START + 1, cohort_end_us=START + 3)
+    assert [(t.id, t.cpu) for t in result.tasks] == [("2:0", 400000), ("3:0", 100000)]
+    assert result.metadata["cohort_task_ids"] == ["2:0", "3:0"]
+    assert result.metadata["selected_job_ids"] == ["2", "3"]
+    assert result.metadata["cohort_start_us"] == START + 1
+    assert result.metadata["cohort_end_us"] == START + 3
+
+
+def test_bounded_terminal_and_quarantine_retain_job_provenance(tmp_path):
+    rows = [
+        task(job=12),
+        task(START + 1, job=2),
+        task(START + 2, job=12, event=4),
+        task(START + 3, job=2, event=7, cpu=""),
+        task(START + 4, job=3),
+        task(START + 10, job=999, event=4),
+    ]
+    result = snapshot(tmp_path, tasks=rows, cohort_end_us=START + 5, max_tasks=2)
+    assert result.tasks == ()
+    assert result.metadata["cohort_task_ids"] == ["12:0", "2:0"]
+    assert result.metadata["selected_job_ids"] == ["2", "12"]
+    assert result.metadata["selected_task_ids"] == []
+
+
+def test_excluded_whole_jobs_never_occupy_slots(tmp_path):
+    rows = [
+        task(job=1),
+        task(START + 1, job=1, index=1),
+        task(START + 2, job=2),
+        task(START + 3, job=3),
+        task(START + 4, job=1, event=7, cpu="0.4"),
+        task(START + 10, job=999, event=4),
+    ]
+    result = snapshot(
+        tmp_path, tasks=rows, cohort_end_us=START + 5, max_tasks=1, excluded_job_ids=["10", "1"]
+    )
+    assert [t.id for t in result.tasks] == ["2:0"]
+    assert result.metadata["excluded_job_ids"] == ["1", "10"]
+    assert result.metadata["selected_job_ids"] == ["2"]
+
+
+def test_bounded_incomplete_submit_cannot_admit_on_update(tmp_path):
+    rows = [
+        task(cpu=""),
+        task(START + 1, job=1, event=7),
+        task(START + 2, job=2),
+        task(START + 3, job=2, event=7, cpu=""),
+        task(START + 4, job=2, event=8, cpu="0.3"),
+        task(START + 10, job=999, event=4),
+    ]
+    bounded = snapshot(tmp_path, tasks=rows, cohort_end_us=START + 3, max_tasks=1)
+    assert [(t.id, t.cpu) for t in bounded.tasks] == [("2:0", 300000)]
+    unbounded = snapshot(tmp_path, tasks=rows, max_tasks=1)
+    assert [t.id for t in unbounded.tasks] == ["1:0"]
+
+
+def test_bounded_cohort_no_future_selection_or_request_lookahead(tmp_path):
+    rows = [
+        task(job=1),
+        task(START + 3, job=2),
+        task(START + 7, job=1, event=7, cpu="0.9"),
+    ]
+    kwargs = {"cohort_end_us": START + 3, "cutoff": START + 3}
+    before = snapshot(tmp_path, tasks=rows, **kwargs)
+    rows[-1] = task(START + 7, job=1, event=7, cpu="0.8")
+    after = snapshot(tmp_path, tasks=rows, **kwargs)
+    assert before.tasks == after.tasks
+    assert before.metadata["cohort_task_ids"] == ["1:0"]
+    assert before.metadata["input_fingerprint"] == after.metadata["input_fingerprint"]
+    assert before.metadata["event_prefix_sha256"] == after.metadata["event_prefix_sha256"]
+    assert before.metadata["source_sha256"] != after.metadata["source_sha256"]
+
+
+def test_terminal_at_exclusive_end_is_replayed(tmp_path):
+    rows = [task(job=1), task(START + 2, job=1, event=4), task(START + 2, job=2)]
+    result = snapshot(tmp_path, tasks=rows, cutoff=START + 2, cohort_end_us=START + 2)
+    assert result.tasks == ()
+    assert result.metadata["selected_job_ids"] == ["1"]
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"cohort_start_us": START - 1},
+        {"cohort_start_us": START + 11},
+        {"cohort_start_us": True},
+        {"cohort_start_us": float(START)},
+        {"cohort_end_us": START},
+        {"cohort_end_us": START + 11},
+        {"cohort_end_us": True},
+        {"cohort_end_us": float(START + 1)},
+        {"excluded_job_ids": "1"},
+        {"excluded_job_ids": {"1"}},
+        {"excluded_job_ids": None},
+        {"excluded_job_ids": [1]},
+        {"excluded_job_ids": ["01"]},
+        {"excluded_job_ids": ["-1"]},
+        {"excluded_job_ids": ["١"]},
+        {"excluded_job_ids": [""]},
+        {"excluded_job_ids": ["1", "1"]},
+        {"excluded_job_ids": [str(data.MAX_TIMESTAMP + 1)]},
+    ],
+)
+def test_holdout_arguments_rejected_before_source_reads(tmp_path, kwargs):
+    with pytest.raises(ValueError):
+        data.read_cluster_snapshot(
+            tmp_path / "absent-machine", tmp_path / "absent-task", cutoff_us=START + 10, **kwargs
+        )
