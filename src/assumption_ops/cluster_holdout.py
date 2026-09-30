@@ -18,7 +18,12 @@ import scipy
 
 from .cluster_data import COHORT_START_US, read_cluster_snapshot
 from .export import _literal
-from .placement import PlacementPolicy, compare_placements, validate_placement_inputs
+from .placement import (
+    PlacementPolicy,
+    compare_placements,
+    validate_placement_inputs,
+    optimize_placement_gated,
+)
 
 
 @dataclass(frozen=True)
@@ -98,12 +103,12 @@ def _validate_protocol(windows, machine_counts, max_tasks, time_limit, verify_ch
     return windows, machine_counts
 
 
-def _summarize(cohorts: list[dict], cases: list[dict]) -> dict:
+def _summarize(cohorts: list[dict], cases: list[dict], include_gated: bool = False) -> dict:
     by_split = {}
     for split in SPLITS:
         rows = [case for case in cases if case["split"] == split]
         methods = {}
-        for method in METHODS:
+        for method in METHODS + (("lp_gated",) if include_gated else ()):
             comparisons = []
             lp_gaps = []
             optimal = wins = ties = losses = 0
@@ -137,6 +142,21 @@ def _summarize(cohorts: list[dict], cases: list[dict]) -> dict:
                 "lp_bound_comparisons": len(lp_gaps),
                 "mean_lp_gap": fmean(lp_gaps) if lp_gaps else None,
             }
+            if method == "lp_gated":
+                gates = [
+                    next(r["gate"] for r in case["comparison"]["results"] if r["method"] == method)
+                    for case in rows
+                ]
+                methods[method].update(
+                    {
+                        "routes": {
+                            route: sum(g["route"] == route for g in gates)
+                            for route in ("lp_certificate", "milp", "greedy_fallback")
+                        },
+                        "milp_invocations": sum(g["milp_invoked"] for g in gates),
+                        "certified_optimal_cases": sum(g["certified_optimal"] for g in gates),
+                    }
+                )
         by_split[split] = {
             "cases": len(rows),
             "cohorts": sum(c["window"]["split"] == split for c in cohorts),
@@ -157,6 +177,7 @@ def run_cluster_holdout(
     max_tasks: int = 64,
     time_limit: float = 5,
     verify_checksums: bool = True,
+    include_gated: bool = False,
 ) -> dict:
     """Freeze the protocol, compile every cohort, then compare all configurations.
 
@@ -168,6 +189,8 @@ def run_cluster_holdout(
     windows, machine_counts = _validate_protocol(
         windows, machine_counts, max_tasks, time_limit, verify_checksums
     )
+    if type(include_gated) is not bool:
+        raise ValueError("include_gated must be boolean")
     protocol = {
         "windows": [asdict(w) for w in windows],
         "machine_counts": list(machine_counts),
@@ -180,6 +203,11 @@ def run_cluster_holdout(
         "checksum_verification": verify_checksums,
     }
     protocol_fingerprint = _hash(protocol)
+    if include_gated:
+        protocol["gated_policy"] = (
+            "Best verified greedy score; exact rational dual-box integer bound certificate; MILP when not certified. Baseline MILP retained independently as evaluation reference."
+        )
+        protocol_fingerprint = _hash(protocol)
     compiled, cohorts, excluded = [], [], set()
     source_hashes = None
     for window in windows:
@@ -234,6 +262,37 @@ def run_cluster_holdout(
             comparison = compare_placements(
                 machines, snapshot.tasks, PlacementPolicy(), previous=None, time_limit=time_limit
             )
+            if include_gated:
+                gated = optimize_placement_gated(
+                    machines,
+                    snapshot.tasks,
+                    PlacementPolicy(),
+                    previous=None,
+                    time_limit=time_limit,
+                )
+                score = gated["evaluation"]["costs"]["total"]
+                lower = comparison["lp_relaxation"]["lower_bound"]
+                reference = comparison["results"][0]
+                reference_score = reference["evaluation"]["costs"]["total"]
+                if lower is not None and score < lower - 1e-6:
+                    raise RuntimeError("Gated placement is below independently computed LP bound")
+                if reference["status"] == "optimal" and score < reference_score:
+                    raise RuntimeError("Gated placement contradicts optimal MILP reference")
+                if gated["gate"]["certified_optimal"] and score > reference_score:
+                    raise RuntimeError(
+                        "Gated optimality certificate contradicts feasible reference"
+                    )
+                comparison["results"].append(
+                    {
+                        "method": "lp_gated",
+                        "status": gated["placement"]["status"],
+                        "placement": gated["placement"],
+                        "evaluation": gated["evaluation"],
+                        "elapsed_seconds": gated["elapsed_seconds"],
+                        "gap_to_lp_bound": None if lower is None else max(0, score - lower),
+                        "gate": gated["gate"],
+                    }
+                )
             cases.append(
                 {
                     "window_id": window.id,
@@ -257,7 +316,7 @@ def run_cluster_holdout(
         "source_sha256": source_hashes,
         "cohorts": cohorts,
         "cases": cases,
-        "summary": _summarize(cohorts, cases),
+        "summary": _summarize(cohorts, cases, include_gated),
         "limitations": [
             "This fixed protocol separates admitted job identities and submission windows; no fitted policy, hyperparameter selection or automatic deployment occurs.",
             "Development includes a previously explored time region. Later windows are a reproducible evaluation extension, not an untouched external test set or preregistered study.",
@@ -268,6 +327,13 @@ def run_cluster_holdout(
             "Regret is alternative score minus verified MILP score, normalized by total request priority. A feasible_limit MILP is an incumbent, not proven optimal; regret may then be negative.",
             "Means give equal weight to each reported nonempty window/configuration case. Empty cohorts are excluded explicitly. Scores and placed tasks are not cumulative jobs completed or business savings.",
             "The LP is a verified optimal fractional lower bound when available; it is never rounded into executable placements. Solver timings are environment dependent.",
+            *(
+                [
+                    "Gated-policy MILP invocation counts exclude baseline solves used as quality references. The gate runs independently and does not reuse baseline LP results. Single-pass timings do not establish a speedup."
+                ]
+                if include_gated
+                else []
+            ),
         ],
     }
 
@@ -292,6 +358,10 @@ def write_cluster_holdout_csv(report: dict, path: str | Path) -> None:
         "lp_lower_bound",
         "gap_to_lp_bound",
         "elapsed_seconds",
+        "gate_route",
+        "gate_milp_invoked",
+        "gate_certified_optimal",
+        "gate_integer_lower_bound",
     )
     with Path(path).open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
@@ -320,5 +390,9 @@ def write_cluster_holdout_csv(report: dict, path: str | Path) -> None:
                     "lp_lower_bound": case["comparison"]["lp_relaxation"]["lower_bound"],
                     "gap_to_lp_bound": result["gap_to_lp_bound"],
                     "elapsed_seconds": result["elapsed_seconds"],
+                    "gate_route": result.get("gate", {}).get("route"),
+                    "gate_milp_invoked": result.get("gate", {}).get("milp_invoked"),
+                    "gate_certified_optimal": result.get("gate", {}).get("certified_optimal"),
+                    "gate_integer_lower_bound": result.get("gate", {}).get("integer_lower_bound"),
                 }
                 writer.writerow({key: _literal(value) for key, value in row.items()})

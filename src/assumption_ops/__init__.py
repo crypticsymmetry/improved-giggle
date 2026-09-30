@@ -26,6 +26,7 @@ from .intake import ScenarioData, load_csv_scenario, load_json_scenario, load_po
 from .optimizer import Allocation, Order, Plan, Policy, Supply, optimize, validate_plan
 from .pipeline import Decision, OperationsPipeline, PlanningResult, StaleDecisionError
 from .placement import (
+    NoPlacementIncumbent,
     Machine,
     Task,
     Placement,
@@ -33,6 +34,7 @@ from .placement import (
     compare_placements,
     evaluate_placement,
     optimize_placement,
+    optimize_placement_gated,
     placement_lp_bound,
     validate_placement_inputs,
 )
@@ -56,6 +58,8 @@ from .warehouse_data import (
 )
 
 __all__ = [
+    "NoPlacementIncumbent",
+    "optimize_placement_gated",
     "Window",
     "DEFAULT_WINDOWS",
     "run_cluster_holdout",

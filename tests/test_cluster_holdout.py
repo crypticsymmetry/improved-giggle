@@ -243,3 +243,69 @@ def test_csv_preserves_all_alternatives_and_matches_exact_scores(tmp_path):
     assert all(float(r["score"]) == float(r["milp_score"]) for r in rows)
     assert all(r["protocol_fingerprint"] == report["protocol_fingerprint"] for r in rows)
     json.dumps(report, allow_nan=False)
+
+
+def test_gated_policy_preserves_reference_scores_and_exports_routes(tmp_path):
+    base = run(tmp_path)
+    gated = run(tmp_path, include_gated=True)
+    assert base["protocol_fingerprint"] != gated["protocol_fingerprint"]
+    assert [c["input_fingerprint"] for c in base["cases"]] == [
+        c["input_fingerprint"] for c in gated["cases"]
+    ]
+    for case in gated["cases"]:
+        results = {r["method"]: r for r in case["comparison"]["results"]}
+        assert set(results) == set(holdout.METHODS) | {"lp_gated"}
+        assert results["lp_gated"]["evaluation"] == results["milp"]["evaluation"]
+        assert results["lp_gated"]["gate"]["route"] == "lp_certificate"
+        assert not results["lp_gated"]["gate"]["milp_invoked"]
+    for split in gated["summary"]["by_split"].values():
+        method = split["methods"]["lp_gated"]
+        assert method["routes"] == {"lp_certificate": 2, "milp": 0, "greedy_fallback": 0}
+        assert method["milp_invocations"] == 0
+        assert method["milp_ties"] == method["certified_optimal_cases"] == 2
+    path = tmp_path / "gate.csv"
+    holdout.write_cluster_holdout_csv(gated, path)
+    with path.open() as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 30
+    assert all(r["gate_route"] == "lp_certificate" for r in rows if r["method"] == "lp_gated")
+    assert all(r["gate_route"] == "" for r in rows if r["method"] != "lp_gated")
+
+
+def test_gated_certificate_contradicting_feasible_reference_fails_closed(tmp_path, monkeypatch):
+    def invalid(machines, tasks, policy, **kwargs):
+        candidate = holdout.compare_placements(machines, tasks, policy)["results"][0]
+        candidate["evaluation"]["costs"]["total"] += 1
+        return {**candidate, "gate": {"certified_optimal": True}}
+
+    monkeypatch.setattr(holdout, "optimize_placement_gated", invalid)
+    with pytest.raises(RuntimeError, match="certificate contradicts"):
+        run(tmp_path, include_gated=True)
+
+
+def test_gated_empty_cohorts_do_not_count_as_avoided_solves(tmp_path, monkeypatch):
+    original = holdout.read_cluster_snapshot
+
+    def read(*a, **k):
+        snapshot = original(*a, **k)
+        return ClusterSnapshot(snapshot.machines, (), snapshot.metadata)
+
+    monkeypatch.setattr(holdout, "read_cluster_snapshot", read)
+    monkeypatch.setattr(
+        holdout,
+        "optimize_placement_gated",
+        lambda *a, **k: pytest.fail("empty cohort must not invoke gated solver"),
+    )
+    report = run(tmp_path, include_gated=True)
+    for split in report["summary"]["by_split"].values():
+        gated = split["methods"]["lp_gated"]
+        assert gated["comparisons"] == gated["milp_invocations"] == 0
+        assert gated["routes"] == {"lp_certificate": 0, "milp": 0, "greedy_fallback": 0}
+
+
+def test_invalid_gate_flag_rejected_before_source_access(monkeypatch):
+    monkeypatch.setattr(
+        holdout, "read_cluster_snapshot", lambda *a, **k: pytest.fail("flag must be validated")
+    )
+    with pytest.raises(ValueError, match="include_gated"):
+        holdout.run_cluster_holdout("missing", "missing", include_gated=1)

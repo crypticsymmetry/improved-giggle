@@ -21,6 +21,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--holdout", action="store_true", help="Run the fixed job-disjoint window protocol"
     )
     parser.add_argument(
+        "--lp-gated", action="store_true", help="Evaluate exact LP-certified gating in holdout mode"
+    )
+    parser.add_argument(
         "--machines-grid", type=int, nargs="+", help="Holdout machine-count grid (default: 1 2 4 8)"
     )
     parser.add_argument("--cutoffs-us", type=int, nargs="+")
@@ -40,6 +43,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
     if not args.holdout and args.machines_grid is not None:
         parser.error("--machines-grid requires --holdout")
+    if args.lp_gated and not args.holdout:
+        parser.error("--lp-gated requires --holdout")
     if args.machine_events is None:
         paths = download_cluster(args.data_dir)
         args.machine_events, args.task_events = paths["machines"], paths["tasks"]
@@ -52,6 +57,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             else (1, 2, 4, 8),
             max_tasks=args.tasks,
             time_limit=args.time_limit if args.time_limit is not None else 5,
+            **({"include_gated": True} if args.lp_gated else {}),
         )
     else:
         report = run_cluster_benchmark(
@@ -66,12 +72,11 @@ def main(argv: Sequence[str] | None = None) -> None:
             time_limit=args.time_limit if args.time_limit is not None else 30,
         )
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    path = args.output_dir / (
-        "cluster_holdout_report.json" if args.holdout else "cluster_report.json"
-    )
+    stem = "cluster_gate" if args.lp_gated else "cluster_holdout" if args.holdout else "cluster"
+    path = args.output_dir / f"{stem}_report.json"
     path.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     if args.holdout:
-        write_cluster_holdout_csv(report, args.output_dir / "cluster_holdout_comparison.csv")
+        write_cluster_holdout_csv(report, args.output_dir / f"{stem}_comparison.csv")
     else:
         write_cluster_csv(report, args.output_dir / "cluster_comparison.csv")
     print(

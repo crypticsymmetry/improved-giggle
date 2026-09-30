@@ -1,4 +1,5 @@
 from copy import deepcopy
+from fractions import Fraction
 from itertools import product
 from types import SimpleNamespace
 
@@ -260,3 +261,231 @@ def test_stability_best_fit_rehomes_missing_machine():
     sticky = next(r for r in report["results"] if r["method"] == "stability_best_fit")
     assert sticky["placement"]["assignments"] == {"a": "new"}
     assert sticky["evaluation"]["costs"]["migration"] == 1
+
+
+def _lp_without_certificate():
+    return {
+        "status": "limit",
+        "lower_bound": None,
+        "fractional_variables": None,
+        "exact_lower_bound": None,
+        "certified_integer_lower_bound": None,
+    }
+
+
+@pytest.mark.parametrize("seed", range(16))
+def test_exact_dual_bound_and_gate_against_enumerated_oracle(seed):
+    rng = np.random.default_rng(seed + 60)
+    machines = [
+        p.Machine(str(i), int(rng.integers(1, 7)), int(rng.integers(1, 7))) for i in range(2)
+    ]
+    tasks = [
+        p.Task(str(i), int(rng.integers(0, 5)), int(rng.integers(0, 5)), int(rng.integers(1, 6)))
+        for i in range(4)
+    ]
+    policy = p.PlacementPolicy(2)
+    previous = p.Placement({"0": "0", "retired": "lost"}, (), 0, "historical")
+    exact_optimum = oracle(machines, tasks, policy, previous)
+    bound = p.placement_lp_bound(machines, tasks, policy, previous)
+    assert bound["certified_integer_lower_bound"] <= exact_optimum
+    value = bound["exact_lower_bound"]
+    assert Fraction(value["numerator"], value["denominator"]) <= exact_optimum
+    before = deepcopy((machines, tasks, policy, previous))
+    gated = p.optimize_placement_gated(machines, tasks, policy, previous)
+    assert gated["evaluation"]["costs"]["total"] == exact_optimum
+    assert gated["gate"]["certified_optimal"]
+    assert (machines, tasks, policy, previous) == before
+    # Arbitrary, nonoptimal and sign-incorrect solver multipliers must still
+    # yield a valid bound after nonpositive clipping and exact box correction.
+    _, _, _, _, c, a, _, high, constant = p._model(machines, tasks, policy, previous, 30)
+    fake_dual = SimpleNamespace(
+        eqlin=SimpleNamespace(marginals=rng.normal(0, 4, len(tasks))),
+        ineqlin=SimpleNamespace(marginals=rng.normal(0, 4, 2 * len(machines))),
+    )
+    repaired = p._exact_dual_box_bound(fake_dual, c, a, high, len(tasks), constant)
+    assert repaired <= exact_optimum
+    assert p._certificate_fields(repaired)["certified_integer_lower_bound"] <= exact_optimum
+
+
+def test_exact_ceiling_does_not_use_near_integer_tolerance():
+    from scipy.sparse import csr_matrix
+
+    dual = SimpleNamespace(
+        eqlin=SimpleNamespace(marginals=[1.000001]), ineqlin=SimpleNamespace(marginals=[])
+    )
+    bound = p._exact_dual_box_bound(dual, np.array([2.0]), csr_matrix([[1]]), np.array([1.0]), 1, 0)
+    assert bound == Fraction(1_000_001, 1_000_000)
+    assert p._certificate_fields(bound)["certified_integer_lower_bound"] == 2
+
+
+def test_box_bound_repairs_positive_resource_dual_and_variable_bounds():
+    from scipy.sparse import csr_matrix
+
+    dual = SimpleNamespace(
+        eqlin=SimpleNamespace(marginals=[2.0]), ineqlin=SimpleNamespace(marginals=[10.0])
+    )
+    bound = p._exact_dual_box_bound(
+        dual, np.array([0.0, 1.0]), csr_matrix([[1, 1], [1, 0]]), np.array([1, 1]), 1, 0
+    )
+    # With z clipped to zero, y=2 and the residuals (-2,-1) give -1.
+    assert bound == -1
+
+
+@pytest.mark.parametrize(
+    "equality,inequality",
+    [([float("nan")], [0, 0]), ([0], [float("inf"), 0]), ([], [0, 0]), ([[0]], [0, 0]), ([0], [0])],
+)
+def test_malformed_duals_leave_lp_diagnostic_but_no_certificate(monkeypatch, equality, inequality):
+    monkeypatch.setattr(
+        p,
+        "linprog",
+        lambda *args, **kwargs: SimpleNamespace(
+            status=0,
+            x=np.array([1.0, 0.0]),
+            fun=0.0,
+            eqlin=SimpleNamespace(marginals=equality),
+            ineqlin=SimpleNamespace(marginals=inequality),
+        ),
+    )
+    bound = p.placement_lp_bound([p.Machine("m", 1, 1)], [p.Task("a", 1, 1, 1)])
+    assert bound["status"] == "optimal"
+    assert bound["lower_bound"] == 0
+    assert bound["exact_lower_bound"] is None
+    assert bound["certified_integer_lower_bound"] is None
+
+
+def test_missing_dual_does_not_certify_float_objective(monkeypatch):
+    monkeypatch.setattr(
+        p,
+        "linprog",
+        lambda *args, **kwargs: SimpleNamespace(status=0, x=np.array([1.0, 0.0]), fun=0.0),
+    )
+    called = []
+    real_milp = p.milp
+
+    def counted(*args, **kwargs):
+        called.append(True)
+        return real_milp(*args, **kwargs)
+
+    monkeypatch.setattr(p, "milp", counted)
+    gated = p.optimize_placement_gated([p.Machine("m", 1, 1)], [p.Task("a", 1, 1, 1)])
+    assert called == [True]
+    assert gated["gate"]["route"] == "milp"
+    assert gated["gate"]["integer_lower_bound"] is None
+
+
+@pytest.mark.parametrize(
+    "machines,tasks,policy,previous,score",
+    [
+        ([p.Machine("m", 10, 10)], [p.Task("a", 2, 2, 1)], p.PlacementPolicy(), None, 0),
+        (
+            [p.Machine("m", 3, 3)],
+            [p.Task("a", 2, 2, 1), p.Task("b", 2, 2, 1)],
+            p.PlacementPolicy(),
+            None,
+            1,
+        ),
+        ([], [], p.PlacementPolicy(3), p.Placement({"retired": "gone"}, (), 0, "old"), 3),
+        ([], [p.Task("a", 2, 2, 4)], p.PlacementPolicy(), None, 4),
+    ],
+)
+def test_gate_certificate_skips_milp(monkeypatch, machines, tasks, policy, previous, score):
+    monkeypatch.setattr(p, "milp", lambda *args, **kwargs: pytest.fail("MILP must be skipped"))
+    gated = p.optimize_placement_gated(machines, tasks, policy, previous)
+    assert gated["gate"]["route"] == "lp_certificate"
+    assert not gated["gate"]["milp_invoked"]
+    assert gated["gate"]["certified_optimal"]
+    assert gated["evaluation"]["costs"]["total"] == score
+    assert gated["placement"]["status"] == "optimal"
+
+
+def test_gate_narrow_no_incumbent_fallback(monkeypatch):
+    monkeypatch.setattr(p, "placement_lp_bound", lambda *args, **kwargs: _lp_without_certificate())
+    monkeypatch.setattr(p, "milp", lambda *args, **kwargs: SimpleNamespace(status=1, x=None))
+    gated = p.optimize_placement_gated([p.Machine("m", 1, 1)], [p.Task("a", 1, 1, 1)])
+    assert gated["gate"]["route"] == "greedy_fallback"
+    assert gated["gate"]["milp_invoked"]
+    assert not gated["gate"]["certified_optimal"]
+    assert gated["placement"]["assignments"] == {"a": "m"}
+
+
+def test_gate_retains_greedy_if_time_limited_incumbent_is_worse(monkeypatch):
+    monkeypatch.setattr(p, "placement_lp_bound", lambda *args, **kwargs: _lp_without_certificate())
+    monkeypatch.setattr(
+        p,
+        "milp",
+        lambda *args, **kwargs: SimpleNamespace(status=1, x=np.array([0.0, 1.0]), fun=1.0),
+    )
+    gated = p.optimize_placement_gated([p.Machine("m", 1, 1)], [p.Task("a", 1, 1, 1)])
+    assert gated["evaluation"]["costs"]["total"] == 0
+    assert gated["placement"]["status"] == "heuristic"
+    assert gated["gate"]["route"] == "milp"
+    assert not gated["gate"]["certified_optimal"]
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        SimpleNamespace(status=0, x=np.array([0.5, 0.5]), fun=0.5),
+        SimpleNamespace(status=0, x=np.array([0.0, 1.0]), fun=1.0),
+        SimpleNamespace(status=1, x=np.array([1.0, 0.0]), fun=1.0),
+        SimpleNamespace(status=4, x=None, message="numerical failure"),
+    ],
+)
+def test_gate_does_not_hide_solver_verification_failures(monkeypatch, result):
+    monkeypatch.setattr(p, "placement_lp_bound", lambda *args, **kwargs: _lp_without_certificate())
+    monkeypatch.setattr(p, "milp", lambda *args, **kwargs: result)
+    with pytest.raises(RuntimeError):
+        p.optimize_placement_gated([p.Machine("m", 1, 1)], [p.Task("a", 1, 1, 1)])
+
+
+def test_gate_rejects_malformed_lp_primal(monkeypatch):
+    monkeypatch.setattr(
+        p,
+        "linprog",
+        lambda *args, **kwargs: SimpleNamespace(status=0, x=np.array([1.0, 1.0]), fun=1.0),
+    )
+    with pytest.raises(RuntimeError, match="infeasible"):
+        p.optimize_placement_gated([p.Machine("m", 1, 1)], [p.Task("a", 1, 1, 1)])
+
+
+def test_gate_rejects_certificate_above_verified_score(monkeypatch):
+    bad = _lp_without_certificate()
+    bad["certified_integer_lower_bound"] = 1
+    monkeypatch.setattr(p, "placement_lp_bound", lambda *args, **kwargs: bad)
+    with pytest.raises(RuntimeError, match="exceeds"):
+        p.optimize_placement_gated([p.Machine("m", 1, 1)], [p.Task("a", 1, 1, 1)])
+
+
+def test_gate_invalid_input_is_not_a_fallback():
+    with pytest.raises(ValueError):
+        p.optimize_placement_gated([], [p.Task("a", -1, 2, 1)])
+
+
+def test_gate_solves_a_remaining_integer_gap():
+    machines = [p.Machine("m", 4, 4)]
+    tasks = [p.Task("a", 3, 3, 3), p.Task("b", 2, 2, 2), p.Task("c", 2, 2, 2)]
+    gated = p.optimize_placement_gated(machines, tasks)
+    assert gated["gate"]["route"] == "milp"
+    assert gated["gate"]["milp_invoked"]
+    assert gated["gate"]["selected_heuristic"] == "priority_first_fit"
+    assert gated["gate"]["integer_lower_bound"] == 3
+    assert gated["evaluation"]["costs"]["total"] == 3
+    assert gated["placement"]["assignments"] == {"b": "m", "c": "m"}
+
+
+def test_gate_certifies_a_time_limited_incumbent_that_reaches_exact_bound(monkeypatch):
+    machines = [p.Machine("m", 4, 4)]
+    tasks = [p.Task("a", 3, 3, 3), p.Task("b", 2, 2, 2), p.Task("c", 2, 2, 2)]
+    monkeypatch.setattr(
+        p,
+        "milp",
+        lambda *args, **kwargs: SimpleNamespace(
+            status=1, x=np.array([0.0, 1.0, 1.0, 1.0, 0.0, 0.0]), fun=3.0
+        ),
+    )
+    gated = p.optimize_placement_gated(machines, tasks)
+    assert gated["gate"]["route"] == "milp"
+    assert gated["gate"]["certified_optimal"]
+    assert gated["placement"]["status"] == "optimal"
+    assert gated["evaluation"]["costs"]["total"] == 3

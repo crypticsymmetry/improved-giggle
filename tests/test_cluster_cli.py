@@ -72,6 +72,7 @@ def test_downloaded_paths_pass_to_benchmark_and_reports_export(tmp_path, capsys,
         ["--holdout", "--cutoffs-us", "900000000"],
         ["--holdout", "--migration-penalty", "1"],
         ["--machines-grid", "1", "2"],
+        ["--lp-gated"],
     ],
 )
 def test_mode_conflicts_fail_before_download(flags, monkeypatch):
@@ -137,3 +138,30 @@ def test_failed_holdout_does_not_create_output(tmp_path, monkeypatch):
             ]
         )
     assert not (tmp_path / "out").exists()
+
+
+def test_gate_mode_preserves_holdout_exports_and_passes_flag(tmp_path, monkeypatch):
+    calls = []
+    report = {"controlled_model": True, "summary": {}, "limitations": [], "cases": []}
+
+    def run(m, t, **kwargs):
+        calls.append(kwargs)
+        return report
+
+    monkeypatch.setattr("assumption_ops.cluster_cli.run_cluster_holdout", run)
+    main(
+        [
+            "--holdout",
+            "--lp-gated",
+            "--machine-events",
+            "m.gz",
+            "--task-events",
+            "t.gz",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+    assert calls[0]["include_gated"] is True
+    assert (tmp_path / "cluster_gate_report.json").exists()
+    assert (tmp_path / "cluster_gate_comparison.csv").exists()
+    assert not (tmp_path / "cluster_holdout_report.json").exists()

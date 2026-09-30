@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+from fractions import Fraction
 from math import isclose, isfinite
 from time import perf_counter
 from typing import Sequence
@@ -47,6 +48,10 @@ class Placement:
             "objective": self.objective,
             "status": self.status,
         }
+
+
+class NoPlacementIncumbent(RuntimeError):
+    """A time-limited MILP returned no placement; verified greedies remain usable."""
 
 
 def _integer(value: object, label: str, minimum: int = 0) -> None:
@@ -262,6 +267,8 @@ def optimize_placement(
     )
     if result.status not in (0, 1):
         raise RuntimeError(f"placement solver failed: {result.message}")
+    if result.status == 1 and result.x is None:
+        raise NoPlacementIncumbent("placement solver reached its limit without an incumbent")
     x = _verified_primal(result, c, a, low, high)
     integer = np.rint(x)
     if np.any(np.abs(integer - x) > 1e-5):
@@ -284,16 +291,67 @@ def optimize_placement(
     return placement
 
 
+def _exact_dual_box_bound(result, coefficients, matrix, upper, n_tasks, constant):
+    """Evaluate a rational Lagrangian bound, including the variable upper bounds.
+
+    Equality multipliers are unrestricted; resource multipliers must be <= 0.
+    Any such multipliers are valid, even when rationalization perturbs the dual
+    optimum. Minimizing each residual coefficient on [0, 1] repairs dual
+    infeasibility without depending on solver tolerances or floating rounding.
+    """
+    try:
+        equality = np.asarray(result.eqlin.marginals, dtype=float)
+        inequality = np.asarray(result.ineqlin.marginals, dtype=float)
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        return None
+    if (
+        equality.shape != (n_tasks,)
+        or inequality.shape != (len(upper) - n_tasks,)
+        or not np.all(np.isfinite(equality))
+        or not np.all(np.isfinite(inequality))
+    ):
+        return None
+    multipliers = [Fraction(float(x)).limit_denominator(1_000_000) for x in equality]
+    multipliers.extend(
+        Fraction(min(0.0, float(x))).limit_denominator(1_000_000) for x in inequality
+    )
+    # _model constructs all coefficients and bounds from validated exact ints.
+    value = Fraction(constant) + sum(
+        (multiplier * int(rhs) for multiplier, rhs in zip(multipliers, upper)),
+        start=Fraction(0),
+    )
+    residuals = [Fraction(int(coefficient)) for coefficient in coefficients]
+    sparse = matrix.tocoo()
+    for row, column, coefficient in zip(sparse.row, sparse.col, sparse.data):
+        residuals[column] -= int(coefficient) * multipliers[row]
+    value += sum((min(Fraction(0), r) for r in residuals), start=Fraction(0))
+    return value
+
+
+def _certificate_fields(bound):
+    if bound is None:
+        return {"exact_lower_bound": None, "certified_integer_lower_bound": None}
+    return {
+        "exact_lower_bound": {"numerator": bound.numerator, "denominator": bound.denominator},
+        "certified_integer_lower_bound": -(-bound.numerator // bound.denominator),
+    }
+
+
 def placement_lp_bound(
     machines, tasks, policy=PlacementPolicy(), previous=None, *, time_limit=30.0
 ) -> dict:
-    """Fractional relaxation for a bound only; never convert fractions into placements."""
+    """Report the LP relaxation and an exact rational dual-box bound when available."""
     machines, tasks, policy, previous = deepcopy((machines, tasks, policy, previous))
     machines, tasks, old, arcs, c, a, low, high, constant = _model(
         machines, tasks, policy, previous, time_limit
     )
     if not len(tasks):
-        return {"status": "optimal", "lower_bound": float(constant), "fractional_variables": 0}
+        return {
+            "status": "optimal",
+            "lower_bound": float(constant),
+            "fractional_variables": 0,
+            **_certificate_fields(Fraction(constant)),
+        }
     result = linprog(
         c,
         A_eq=a[: len(tasks)],
@@ -310,12 +368,14 @@ def placement_lp_bound(
             "lower_bound": None,
             "fractional_variables": None,
             "message": result.message,
+            **_certificate_fields(None),
         }
     x = _verified_primal(result, c, a, low, high)
     return {
         "status": "optimal",
         "lower_bound": float(result.fun + constant),
         "fractional_variables": int(np.count_nonzero(np.abs(x - np.rint(x)) > 1e-5)),
+        **_certificate_fields(_exact_dual_box_bound(result, c, a, high, len(tasks), constant)),
     }
 
 
@@ -355,6 +415,93 @@ def _greedy(machines, tasks, policy, previous, best_fit, stability=False):
         assignments.get(t) != m for t, m in old.items()
     )
     return Placement(assignments, pending, float(total), "heuristic")
+
+
+def optimize_placement_gated(
+    machines, tasks, policy=PlacementPolicy(), previous=None, *, time_limit=30.0
+) -> dict:
+    """Certify the best verified greedy score, or solve and retain the best incumbent.
+
+    A rational dual-box bound provides the certificate: equality between its
+    exact integer ceiling and a feasible integer score proves optimality. The
+    floating LP objective is diagnostic only. The time limit applies separately
+    to the LP and, if needed, MILP; this is not a total wall-clock deadline.
+    """
+    started = perf_counter()
+    machines, tasks, policy, previous = deepcopy((machines, tasks, policy, previous))
+    _model(machines, tasks, policy, previous, time_limit)
+    candidates = []
+    for method in ("priority_first_fit", "best_fit", "stability_best_fit"):
+        candidate = _greedy(
+            machines,
+            tasks,
+            policy,
+            previous,
+            method != "priority_first_fit",
+            method == "stability_best_fit",
+        )
+        evaluation = evaluate_placement(machines, tasks, policy, candidate, previous)
+        candidates.append((evaluation["costs"]["total"], method, candidate, evaluation))
+    # min is stable for equal keys, preserving the explicitly declared method order.
+    score, heuristic, placement, evaluation = min(candidates, key=lambda item: item[0])
+    bound_started = perf_counter()
+    bound = placement_lp_bound(machines, tasks, policy, previous, time_limit=time_limit)
+    bound["elapsed_seconds"] = perf_counter() - bound_started
+    integer_bound = bound["certified_integer_lower_bound"]
+    if integer_bound is not None and integer_bound > score:
+        raise RuntimeError("exact lower bound exceeds a verified greedy score")
+    gate = {
+        "route": "lp_certificate",
+        "milp_invoked": False,
+        "certified_optimal": integer_bound == score,
+        "reason": "exact integer lower bound equals verified greedy score",
+        "selected_heuristic": heuristic,
+        "integer_lower_bound": integer_bound,
+        "lp_relaxation": bound,
+    }
+    if integer_bound == score:
+        placement = Placement(
+            placement.assignments, placement.pending, placement.objective, "optimal"
+        )
+    else:
+        gate.update(
+            route="milp",
+            milp_invoked=True,
+            certified_optimal=False,
+            reason=(
+                "exact bound unavailable; MILP required"
+                if integer_bound is None
+                else "verified greedy score exceeds exact integer lower bound; MILP required"
+            ),
+        )
+        try:
+            optimized = optimize_placement(machines, tasks, policy, previous, time_limit=time_limit)
+        except NoPlacementIncumbent as error:
+            gate.update(route="greedy_fallback", reason=str(error))
+        else:
+            optimized_evaluation = evaluate_placement(machines, tasks, policy, optimized, previous)
+            optimized_score = optimized_evaluation["costs"]["total"]
+            if integer_bound is not None and optimized_score < integer_bound:
+                raise RuntimeError("verified MILP score is below the exact lower bound")
+            if optimized.status == "optimal" and optimized_score > score:
+                raise RuntimeError("claimed optimal MILP score exceeds a verified greedy score")
+            if optimized_score <= score:
+                placement, evaluation = optimized, optimized_evaluation
+            gate["certified_optimal"] = optimized.status == "optimal" or (
+                integer_bound is not None and evaluation["costs"]["total"] == integer_bound
+            )
+            if gate["certified_optimal"] and placement.status != "optimal":
+                placement = Placement(
+                    placement.assignments, placement.pending, placement.objective, "optimal"
+                )
+            if optimized.status == "feasible_limit":
+                gate["reason"] += "; time limit reached, retained best verified incumbent"
+    return {
+        "placement": placement.to_dict(),
+        "evaluation": evaluation,
+        "gate": gate,
+        "elapsed_seconds": perf_counter() - started,
+    }
 
 
 def compare_placements(

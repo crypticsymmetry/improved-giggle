@@ -913,3 +913,50 @@ The original development example showed larger improvements than these later
 cohorts. The observed benefit is workload dependent; greedy methods are already
 optimal in most of this bounded evaluation. Means weight cases equally, include
 ties, and do not represent percentage savings or cumulative completed work.
+
+
+### v0.10: exact LP-certified placement gate
+
+The [new Colab gate notebook](https://colab.research.google.com/github/crypticsymmetry/improved-giggle/blob/main/notebooks/google_cluster_gate.ipynb)
+compares a policy that certifies a greedy placement before deciding whether MILP
+is needed. It uses the same job-disjoint public-source protocol as v0.9.
+
+```bash
+assumption-ops-cluster --holdout --lp-gated --machines-grid 1 2 4 8 \
+  --tasks 64 --time-limit 5 --output-dir cluster_gate_results
+```
+
+The policy independently verifies three greedy proposals, keeps the best score,
+and solves the LP relaxation. It reconstructs a valid lower bound using exact
+rational arithmetic on LP multipliers, including a residual term for every bounded
+variable. Since the objective is integer, equality between the bound's exact
+ceiling and the feasible greedy score certifies optimality. It does not use a
+floating-point near-equality check or round fractional assignments into a plan.
+When the certificate is unavailable or a gap remains, it invokes MILP and retains
+the best verified proposal. A time limit with no MILP incumbent preserves the
+greedy plan with an explicit nonoptimal fallback; invalid solver proposals fail
+validation. Standalone `optimize_placement_gated` also supports previous placements
+and integer migration penalties.
+
+The [gate contract](docs/google_cluster_gate.md) documents the certificate,
+statuses and output fields. Results are preserved in
+[`examples/google_cluster_gate_summary.json`](examples/google_cluster_gate_summary.json):
+
+| Split | Evaluated cases | Certified without MILP | Gated MILP calls | Equal to optimal MILP reference |
+|---|---:|---:|---:|---:|
+| Development | 4 | 1 | 3 | 4 |
+| Validation | 4 | 0 | 4 | 4 |
+| Holdout | 20 | 12 | 8 | 20 |
+
+The gated policy avoids 60% of holdout MILP calls while matching all reference
+scores in this run. It still solves all validation cases: their greedy proposals
+are optimal, but the LP bounds are too loose to certify them. Across all 28 cases,
+13 skip MILP, 15 invoke it, and none use the no-incumbent fallback. One empty
+holdout cohort remains excluded from these denominators.
+
+The benchmark retains independent MILP reference solves, so avoided calls refer
+to the gated policy, not total notebook solver activity. LP solving, greedy
+verification and rational arithmetic also incur work; single-pass timings do not
+establish an end-to-end speedup. The result supports testing this gate on larger
+workloads, with repeated timing comparisons and representative constraints,
+before choosing it as a deployment default.
