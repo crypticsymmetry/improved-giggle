@@ -1,0 +1,831 @@
+{
+  "schema_version": 1,
+  "dataset": "Google ClusterData2011-2: complete machine-events file and first task-events shard",
+  "source": "https://github.com/google/cluster-data/blob/master/ClusterData2011_2.md",
+  "license": "CC BY 4.0; see publisher documentation",
+  "real_source_records": true,
+  "controlled_model": true,
+  "external_dispatch": false,
+  "environment": {
+    "python": "3.12.14",
+    "scipy": "1.17.0"
+  },
+  "policy": {
+    "migration_penalty": 1
+  },
+  "limitations": [
+    "A deterministic bounded cohort of submitted tasks is modeled against selected machines' full recorded capacities; existing occupancy is not reconstructed or assumed actually free.",
+    "CPU and memory values are publisher-normalized requests/limits and capacities, not literal core counts, bytes or measured consumption.",
+    "Task requests are rounded up and capacities down into fixed integer ticks; reported feasibility applies to that conservative model.",
+    "Disk, machine attributes, general affinity, networking, service dependencies and task durations are not modeled; flagged different-machine tasks are excluded.",
+    "Google may overcommit resources; this experiment imposes hard CPU/memory capacity limits.",
+    "Trace priority plus one is an assumed cardinal admission weight, not monetary value or a faithful reproduction of Borg's policy.",
+    "Event timestamps determine simulated visibility; the release provides no per-record ingestion timestamps, so actual observation latency is unknown.",
+    "The initial optimized plan is the shared frozen migration-cost reference for all later methods; new snapshots do not evolve each baseline's own execution history.",
+    "ATMS supports justify joint per-machine resource feasibility using all colocated request facts; they do not certify global optimality. Every snapshot is reoptimized.",
+    "Repeated snapshots overlap and are alternative plans, not cumulative completed jobs, priority served or production savings.",
+    "LP is a fractional lower bound only when independently verified optimal; it is not rounded or dispatched as a task assignment.",
+    "No scheduling writes, approvals, reservations, causal performance claims or comparison against Google's production scheduler occur."
+  ],
+  "configuration": {
+    "max_machines": 4,
+    "max_task_identities": 64,
+    "cutoffs_us": [
+      900000000,
+      1200000000,
+      1800000000
+    ],
+    "migration_reference": "initial MILP assignments for all later alternatives"
+  },
+  "snapshots": [
+    {
+      "cutoff_us": 900000000,
+      "minutes_after_trace_start": 5.0,
+      "tasks": 54,
+      "machines": 4,
+      "input_fingerprint": "1102d781b72dc94fdb73360ae9d12c30c9f889b850644cd24b5c41bb2514026b",
+      "source_metadata": {
+        "source": "Google clusterdata-2011-2",
+        "license": "CC BY 4.0",
+        "cutoff_us": 900000000,
+        "cohort_start_us": 600000000,
+        "cohort_policy": "First eligible task identities; terminal exits do not refill cohort slots.",
+        "max_machines": 4,
+        "max_tasks": 64,
+        "resource_scale": 1000000,
+        "rounding": "ceil task requests; floor machine capacities",
+        "source_sha256": {
+          "machines": "fc44b8d2b33a96a261382488789855be7a0ce338888c99930ff45cb592249664",
+          "tasks": "eae977d521bc6ed5d8deef56f1e06009d41844d4eb9a7e308e610d68e1b10f18"
+        },
+        "event_prefix_sha256": {
+          "machines": "2babba398cffbdb92a12848e3c78320227c8cd0be5a9c4383149683673bb8bcb",
+          "tasks": "58063859ed21464f92c5520691454497ceee080eb72a5faac3c53fa538f2cd73"
+        },
+        "input_fingerprint": "b588e784ec4e2fced47bf16d1407a46cd00c69eb381723a150f3251dabaf5908",
+        "selected_machine_ids": [
+          "5",
+          "6",
+          "7",
+          "10"
+        ],
+        "selected_task_ids": [
+          "5285926325:0",
+          "515042969:2",
+          "515042969:6",
+          "6250345153:878",
+          "515042969:18",
+          "515042969:9",
+          "515042969:10",
+          "6250245734:3586",
+          "515042969:7",
+          "515042969:26",
+          "6250245734:3781",
+          "515042969:24",
+          "515042969:15",
+          "515042969:14",
+          "515042969:5",
+          "515042969:17",
+          "515042969:23",
+          "515042969:12",
+          "515042969:4",
+          "6250345153:822",
+          "6184995193:229",
+          "515042969:3",
+          "6221861800:8999",
+          "6221861800:9009",
+          "515042969:8",
+          "515042969:25",
+          "515042969:21",
+          "515042969:0",
+          "515042969:19",
+          "515042969:13",
+          "515042969:22",
+          "515042969:1",
+          "515042969:16",
+          "515042969:20",
+          "6219557576:7",
+          "6251669667:0",
+          "6218406404:432",
+          "6218406404:424",
+          "6218406404:240",
+          "6218406404:1065",
+          "6218406404:69",
+          "6218406404:414",
+          "6251670402:0",
+          "6250345153:1161",
+          "6221861800:8074",
+          "6251500408:0",
+          "3536441868:0",
+          "6221861800:7390",
+          "6250422572:0",
+          "6251670872:0",
+          "6130716573:0",
+          "6221861800:11726",
+          "515042969:11",
+          "6251671757:0"
+        ],
+        "task_shard_last_finite_us": 5611086346,
+        "counts": {
+          "machine_rows": 37780,
+          "task_rows": 450146,
+          "consistent_duplicates": 0,
+          "missing_machine_records": 0,
+          "quarantined_task_records": 3172,
+          "unsupported_restriction_records": 3165,
+          "rounded_capacity_values": 0,
+          "rounded_request_values": 0
+        },
+        "assumptions": [
+          "Event time only: no observation timestamps supplied.",
+          "Full modeled machine capacity reserved for the selected cohort; existing occupancy excluded.",
+          "Only first task-event shard is loaded; submissions before cohort_start_us are excluded.",
+          "Disk, task constraints, affinity, anti-affinity, and production overcommit are unmodeled.",
+          "Known different-machine restrictions and unknown flags are excluded.",
+          "Priorities are mapped to trace priority + 1; weights are modeling choices.",
+          "Schedule and eviction events do not execute or release simulated allocations."
+        ]
+      },
+      "lp_lower_bound": 9.790377358490566,
+      "invalidated_previous_decisions": 0,
+      "methods": [
+        {
+          "method": "milp",
+          "status": "optimal",
+          "costs": {
+            "pending_priority": 10,
+            "migration": 0,
+            "total": 10
+          },
+          "metrics": {
+            "tasks": 54,
+            "placed_tasks": 50,
+            "pending_tasks": 4,
+            "placed_priority": 112,
+            "total_priority": 122,
+            "used_cpu": 1415568,
+            "used_memory": 990534,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 0.20962264150943355
+        },
+        {
+          "method": "priority_first_fit",
+          "status": "heuristic",
+          "costs": {
+            "pending_priority": 28,
+            "migration": 0,
+            "total": 28
+          },
+          "metrics": {
+            "tasks": 54,
+            "placed_tasks": 26,
+            "pending_tasks": 28,
+            "placed_priority": 94,
+            "total_priority": 122,
+            "used_cpu": 1103018,
+            "used_memory": 986084,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 18.209622641509434
+        },
+        {
+          "method": "best_fit",
+          "status": "heuristic",
+          "costs": {
+            "pending_priority": 29,
+            "migration": 0,
+            "total": 29
+          },
+          "metrics": {
+            "tasks": 54,
+            "placed_tasks": 25,
+            "pending_tasks": 29,
+            "placed_priority": 93,
+            "total_priority": 122,
+            "used_cpu": 1034288,
+            "used_memory": 974154,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 19.209622641509434
+        },
+        {
+          "method": "stability_best_fit",
+          "status": "heuristic",
+          "costs": {
+            "pending_priority": 29,
+            "migration": 0,
+            "total": 29
+          },
+          "metrics": {
+            "tasks": 54,
+            "placed_tasks": 25,
+            "pending_tasks": 29,
+            "placed_priority": 93,
+            "total_priority": 122,
+            "used_cpu": 1034288,
+            "used_memory": 974154,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 19.209622641509434
+        }
+      ]
+    },
+    {
+      "cutoff_us": 1200000000,
+      "minutes_after_trace_start": 10.0,
+      "tasks": 52,
+      "machines": 4,
+      "input_fingerprint": "0135b6971610ee00401c2d289ba4c574ffbbd69a6a8e8e2a8500a51e6999f418",
+      "source_metadata": {
+        "source": "Google clusterdata-2011-2",
+        "license": "CC BY 4.0",
+        "cutoff_us": 1200000000,
+        "cohort_start_us": 600000000,
+        "cohort_policy": "First eligible task identities; terminal exits do not refill cohort slots.",
+        "max_machines": 4,
+        "max_tasks": 64,
+        "resource_scale": 1000000,
+        "rounding": "ceil task requests; floor machine capacities",
+        "source_sha256": {
+          "machines": "fc44b8d2b33a96a261382488789855be7a0ce338888c99930ff45cb592249664",
+          "tasks": "eae977d521bc6ed5d8deef56f1e06009d41844d4eb9a7e308e610d68e1b10f18"
+        },
+        "event_prefix_sha256": {
+          "machines": "4683efb38163687ea5cbb11107fe9a345c2756824b4fce3261188b960b1d17ef",
+          "tasks": "4eb653c254774e7c4696e021a3c17dc022f9cb410f669c29e6a3686d77fffcee"
+        },
+        "input_fingerprint": "2850cf051c42fa1c85dae841ffb046e64bb58aed8dacc1221c80868b513b36bc",
+        "selected_machine_ids": [
+          "5",
+          "6",
+          "7",
+          "10"
+        ],
+        "selected_task_ids": [
+          "5285926325:0",
+          "515042969:2",
+          "515042969:6",
+          "6250345153:878",
+          "515042969:18",
+          "515042969:9",
+          "515042969:10",
+          "6250245734:3586",
+          "515042969:7",
+          "515042969:26",
+          "6250245734:3781",
+          "515042969:24",
+          "515042969:15",
+          "515042969:14",
+          "515042969:5",
+          "515042969:17",
+          "515042969:23",
+          "515042969:12",
+          "515042969:4",
+          "6250345153:822",
+          "6184995193:229",
+          "515042969:3",
+          "6221861800:8999",
+          "6221861800:9009",
+          "515042969:8",
+          "515042969:25",
+          "515042969:21",
+          "515042969:0",
+          "515042969:19",
+          "515042969:13",
+          "515042969:22",
+          "515042969:1",
+          "515042969:16",
+          "515042969:20",
+          "6219557576:7",
+          "6218406404:432",
+          "6218406404:424",
+          "6218406404:240",
+          "6218406404:1065",
+          "6218406404:69",
+          "6218406404:414",
+          "6250345153:1161",
+          "6221861800:8074",
+          "6251500408:0",
+          "3536441868:0",
+          "6221861800:7390",
+          "6250422572:0",
+          "6251670872:0",
+          "6130716573:0",
+          "6221861800:11726",
+          "515042969:11",
+          "6251671757:0"
+        ],
+        "task_shard_last_finite_us": 5611086346,
+        "counts": {
+          "machine_rows": 37780,
+          "task_rows": 450146,
+          "consistent_duplicates": 0,
+          "missing_machine_records": 0,
+          "quarantined_task_records": 3183,
+          "unsupported_restriction_records": 3168,
+          "rounded_capacity_values": 0,
+          "rounded_request_values": 0
+        },
+        "assumptions": [
+          "Event time only: no observation timestamps supplied.",
+          "Full modeled machine capacity reserved for the selected cohort; existing occupancy excluded.",
+          "Only first task-event shard is loaded; submissions before cohort_start_us are excluded.",
+          "Disk, task constraints, affinity, anti-affinity, and production overcommit are unmodeled.",
+          "Known different-machine restrictions and unknown flags are excluded.",
+          "Priorities are mapped to trace priority + 1; weights are modeling choices.",
+          "Schedule and eviction events do not execute or release simulated allocations."
+        ]
+      },
+      "lp_lower_bound": 8.419780405405405,
+      "invalidated_previous_decisions": 20,
+      "methods": [
+        {
+          "method": "milp",
+          "status": "optimal",
+          "costs": {
+            "pending_priority": 8,
+            "migration": 2,
+            "total": 10
+          },
+          "metrics": {
+            "tasks": 52,
+            "placed_tasks": 49,
+            "pending_tasks": 3,
+            "placed_priority": 102,
+            "total_priority": 110,
+            "used_cpu": 1465568,
+            "used_memory": 934834,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 1.5802195945945954
+        },
+        {
+          "method": "priority_first_fit",
+          "status": "heuristic",
+          "costs": {
+            "pending_priority": 21,
+            "migration": 45,
+            "total": 66
+          },
+          "metrics": {
+            "tasks": 52,
+            "placed_tasks": 31,
+            "pending_tasks": 21,
+            "placed_priority": 89,
+            "total_priority": 110,
+            "used_cpu": 1084248,
+            "used_memory": 979094,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 57.580219594594595
+        },
+        {
+          "method": "best_fit",
+          "status": "heuristic",
+          "costs": {
+            "pending_priority": 21,
+            "migration": 45,
+            "total": 66
+          },
+          "metrics": {
+            "tasks": 52,
+            "placed_tasks": 31,
+            "pending_tasks": 21,
+            "placed_priority": 89,
+            "total_priority": 110,
+            "used_cpu": 1084248,
+            "used_memory": 979094,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 57.580219594594595
+        },
+        {
+          "method": "stability_best_fit",
+          "status": "heuristic",
+          "costs": {
+            "pending_priority": 21,
+            "migration": 26,
+            "total": 47
+          },
+          "metrics": {
+            "tasks": 52,
+            "placed_tasks": 31,
+            "pending_tasks": 21,
+            "placed_priority": 89,
+            "total_priority": 110,
+            "used_cpu": 1084248,
+            "used_memory": 979094,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 38.580219594594595
+        }
+      ]
+    },
+    {
+      "cutoff_us": 1800000000,
+      "minutes_after_trace_start": 20.0,
+      "tasks": 50,
+      "machines": 4,
+      "input_fingerprint": "497fb7b3b6ae382b6f4a577cb726850676f0177dbc36bb8f23972b673577fd63",
+      "source_metadata": {
+        "source": "Google clusterdata-2011-2",
+        "license": "CC BY 4.0",
+        "cutoff_us": 1800000000,
+        "cohort_start_us": 600000000,
+        "cohort_policy": "First eligible task identities; terminal exits do not refill cohort slots.",
+        "max_machines": 4,
+        "max_tasks": 64,
+        "resource_scale": 1000000,
+        "rounding": "ceil task requests; floor machine capacities",
+        "source_sha256": {
+          "machines": "fc44b8d2b33a96a261382488789855be7a0ce338888c99930ff45cb592249664",
+          "tasks": "eae977d521bc6ed5d8deef56f1e06009d41844d4eb9a7e308e610d68e1b10f18"
+        },
+        "event_prefix_sha256": {
+          "machines": "9583509d87b230d84a5df321951140ab3ec126d39af58fbdfb48f365ae059fd0",
+          "tasks": "128341aa9a606919dc37874ea6de05fd514835e2a59e52b9a6c454e907cf5141"
+        },
+        "input_fingerprint": "4f5dd7a373ef5da80980c780f30643304abd2f686df4f7e8c638ef570f149777",
+        "selected_machine_ids": [
+          "5",
+          "6",
+          "7",
+          "10"
+        ],
+        "selected_task_ids": [
+          "5285926325:0",
+          "515042969:2",
+          "515042969:6",
+          "6250345153:878",
+          "515042969:18",
+          "515042969:9",
+          "515042969:10",
+          "6250245734:3586",
+          "515042969:7",
+          "515042969:26",
+          "6250245734:3781",
+          "515042969:24",
+          "515042969:15",
+          "515042969:14",
+          "515042969:5",
+          "515042969:17",
+          "515042969:23",
+          "515042969:12",
+          "515042969:4",
+          "6250345153:822",
+          "6184995193:229",
+          "515042969:3",
+          "6221861800:8999",
+          "6221861800:9009",
+          "515042969:8",
+          "515042969:25",
+          "515042969:21",
+          "515042969:0",
+          "515042969:19",
+          "515042969:13",
+          "515042969:22",
+          "515042969:1",
+          "515042969:16",
+          "515042969:20",
+          "6219557576:7",
+          "6218406404:432",
+          "6218406404:424",
+          "6218406404:240",
+          "6218406404:1065",
+          "6218406404:69",
+          "6218406404:414",
+          "6250345153:1161",
+          "6221861800:8074",
+          "3536441868:0",
+          "6221861800:7390",
+          "6250422572:0",
+          "6130716573:0",
+          "6221861800:11726",
+          "515042969:11",
+          "6251671757:0"
+        ],
+        "task_shard_last_finite_us": 5611086346,
+        "counts": {
+          "machine_rows": 37780,
+          "task_rows": 450146,
+          "consistent_duplicates": 0,
+          "missing_machine_records": 0,
+          "quarantined_task_records": 11745,
+          "unsupported_restriction_records": 11668,
+          "rounded_capacity_values": 0,
+          "rounded_request_values": 0
+        },
+        "assumptions": [
+          "Event time only: no observation timestamps supplied.",
+          "Full modeled machine capacity reserved for the selected cohort; existing occupancy excluded.",
+          "Only first task-event shard is loaded; submissions before cohort_start_us are excluded.",
+          "Disk, task constraints, affinity, anti-affinity, and production overcommit are unmodeled.",
+          "Known different-machine restrictions and unknown flags are excluded.",
+          "Priorities are mapped to trace priority + 1; weights are modeling choices.",
+          "Schedule and eviction events do not execute or release simulated allocations."
+        ]
+      },
+      "lp_lower_bound": 9.170878378378376,
+      "invalidated_previous_decisions": 23,
+      "methods": [
+        {
+          "method": "milp",
+          "status": "optimal",
+          "costs": {
+            "pending_priority": 7,
+            "migration": 5,
+            "total": 12
+          },
+          "metrics": {
+            "tasks": 50,
+            "placed_tasks": 47,
+            "pending_tasks": 3,
+            "placed_priority": 85,
+            "total_priority": 92,
+            "used_cpu": 1315578,
+            "used_memory": 940344,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 2.829121621621624
+        },
+        {
+          "method": "priority_first_fit",
+          "status": "heuristic",
+          "costs": {
+            "pending_priority": 17,
+            "migration": 45,
+            "total": 62
+          },
+          "metrics": {
+            "tasks": 50,
+            "placed_tasks": 33,
+            "pending_tasks": 17,
+            "placed_priority": 75,
+            "total_priority": 92,
+            "used_cpu": 1112348,
+            "used_memory": 988324,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 52.829121621621624
+        },
+        {
+          "method": "best_fit",
+          "status": "heuristic",
+          "costs": {
+            "pending_priority": 17,
+            "migration": 44,
+            "total": 61
+          },
+          "metrics": {
+            "tasks": 50,
+            "placed_tasks": 33,
+            "pending_tasks": 17,
+            "placed_priority": 75,
+            "total_priority": 92,
+            "used_cpu": 1112348,
+            "used_memory": 988324,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 51.829121621621624
+        },
+        {
+          "method": "stability_best_fit",
+          "status": "heuristic",
+          "costs": {
+            "pending_priority": 17,
+            "migration": 35,
+            "total": 52
+          },
+          "metrics": {
+            "tasks": 50,
+            "placed_tasks": 33,
+            "pending_tasks": 17,
+            "placed_priority": 75,
+            "total_priority": 92,
+            "used_cpu": 1112348,
+            "used_memory": 988324,
+            "cpu_capacity": 2000000,
+            "memory_capacity": 997200
+          },
+          "gap_to_lp_bound": 42.829121621621624
+        }
+      ]
+    }
+  ],
+  "capacity_sensitivity": {
+    "description": "First cutoff with the deterministic first 1, 2, 4 or 8 machines and no previous plan; same bounded task identities. This reports the full grid, including the uncongested case.",
+    "cutoff_us": 900000000,
+    "machine_counts": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "results": [
+      {
+        "machines": 1,
+        "tasks": 54,
+        "input_fingerprint": "c4863571fa2a92361a6f107290a98472e48cfa5d26accc7483a1047592f8ada4",
+        "lp_lower_bound": 58.97814313346228,
+        "methods": [
+          {
+            "method": "milp",
+            "status": "optimal",
+            "costs": {
+              "pending_priority": 60,
+              "migration": 0,
+              "total": 60
+            },
+            "placed_tasks": 9
+          },
+          {
+            "method": "priority_first_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 60,
+              "migration": 0,
+              "total": 60
+            },
+            "placed_tasks": 9
+          },
+          {
+            "method": "best_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 60,
+              "migration": 0,
+              "total": 60
+            },
+            "placed_tasks": 9
+          },
+          {
+            "method": "stability_best_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 60,
+              "migration": 0,
+              "total": 60
+            },
+            "placed_tasks": 9
+          }
+        ]
+      },
+      {
+        "machines": 2,
+        "tasks": 54,
+        "input_fingerprint": "760bae380352ccf73976bdc6732d454e34d5849fd9d4a5ebe64de962a6327854",
+        "lp_lower_bound": 39.56368319381842,
+        "methods": [
+          {
+            "method": "milp",
+            "status": "optimal",
+            "costs": {
+              "pending_priority": 40,
+              "migration": 0,
+              "total": 40
+            },
+            "placed_tasks": 20
+          },
+          {
+            "method": "priority_first_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 45,
+              "migration": 0,
+              "total": 45
+            },
+            "placed_tasks": 13
+          },
+          {
+            "method": "best_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 45,
+              "migration": 0,
+              "total": 45
+            },
+            "placed_tasks": 13
+          },
+          {
+            "method": "stability_best_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 45,
+              "migration": 0,
+              "total": 45
+            },
+            "placed_tasks": 13
+          }
+        ]
+      },
+      {
+        "machines": 4,
+        "tasks": 54,
+        "input_fingerprint": "b588e784ec4e2fced47bf16d1407a46cd00c69eb381723a150f3251dabaf5908",
+        "lp_lower_bound": 9.790377358490566,
+        "methods": [
+          {
+            "method": "milp",
+            "status": "optimal",
+            "costs": {
+              "pending_priority": 10,
+              "migration": 0,
+              "total": 10
+            },
+            "placed_tasks": 50
+          },
+          {
+            "method": "priority_first_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 28,
+              "migration": 0,
+              "total": 28
+            },
+            "placed_tasks": 26
+          },
+          {
+            "method": "best_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 29,
+              "migration": 0,
+              "total": 29
+            },
+            "placed_tasks": 25
+          },
+          {
+            "method": "stability_best_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 29,
+              "migration": 0,
+              "total": 29
+            },
+            "placed_tasks": 25
+          }
+        ]
+      },
+      {
+        "machines": 8,
+        "tasks": 54,
+        "input_fingerprint": "a208425479ccb0b2c65f81253fb7d31816360c55da5ef05234ef0cab4fff4d8d",
+        "lp_lower_bound": 0.0,
+        "methods": [
+          {
+            "method": "milp",
+            "status": "optimal",
+            "costs": {
+              "pending_priority": 0,
+              "migration": 0,
+              "total": 0
+            },
+            "placed_tasks": 54
+          },
+          {
+            "method": "priority_first_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 0,
+              "migration": 0,
+              "total": 0
+            },
+            "placed_tasks": 54
+          },
+          {
+            "method": "best_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 0,
+              "migration": 0,
+              "total": 0
+            },
+            "placed_tasks": 54
+          },
+          {
+            "method": "stability_best_fit",
+            "status": "heuristic",
+            "costs": {
+              "pending_priority": 0,
+              "migration": 0,
+              "total": 0
+            },
+            "placed_tasks": 54
+          }
+        ]
+      }
+    ]
+  }
+}

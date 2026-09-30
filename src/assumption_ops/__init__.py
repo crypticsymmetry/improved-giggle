@@ -14,6 +14,8 @@ from .business import (
 )
 from .business_io import load_business_pilot, write_business_csv
 from .business_template import create_business_template
+from .cluster_benchmark import run_cluster_benchmark, write_cluster_csv
+from .cluster_data import ClusterSnapshot, download_cluster, read_cluster_snapshot
 from .calibration import PenaltyCandidate, calibrate
 from .evidence import EvidenceConflict, EvidenceStore, JsonExtractor
 from .events import EvidenceUpdate, UpdateReceipt, StaleSnapshotError, IdempotencyConflict
@@ -22,6 +24,17 @@ from .export import write_comparison_csv
 from .intake import ScenarioData, load_csv_scenario, load_json_scenario, load_policy_json
 from .optimizer import Allocation, Order, Plan, Policy, Supply, optimize, validate_plan
 from .pipeline import Decision, OperationsPipeline, PlanningResult, StaleDecisionError
+from .placement import (
+    Machine,
+    Task,
+    Placement,
+    PlacementPolicy,
+    compare_placements,
+    evaluate_placement,
+    optimize_placement,
+    placement_lp_bound,
+    validate_placement_inputs,
+)
 from .pilot import (
     PilotDataset,
     PilotEpisode,
@@ -42,6 +55,20 @@ from .warehouse_data import (
 )
 
 __all__ = [
+    "ClusterSnapshot",
+    "download_cluster",
+    "read_cluster_snapshot",
+    "run_cluster_benchmark",
+    "write_cluster_csv",
+    "Machine",
+    "Task",
+    "Placement",
+    "PlacementPolicy",
+    "compare_placements",
+    "evaluate_placement",
+    "optimize_placement",
+    "placement_lp_bound",
+    "validate_placement_inputs",
     "create_business_template",
     "BusinessPilot",
     "CatalogItem",

@@ -785,3 +785,85 @@ until explicitly supplied, so an unfilled template cannot generate evaluation
 results. The [business-pilot notebook](notebooks/business_pilot.ipynb) now includes
 a template ZIP and a separate `REAL_MANIFEST` section for completed uploads.
 Until actual records are supplied, actual-data evaluation remains pending.
+
+### v0.8: public Google cluster resource-placement benchmark
+
+The Google cluster benchmark extends the framework to indivisible tasks with
+simultaneous CPU and memory requirements. It downloads two checksummed public
+files from Google's 2011 production trace: the complete machine-events file and
+the first task-events shard. The compressed download is approximately 4.5 MB;
+there is no need to retrieve the full trace or configure an API key.
+
+```bash
+python -m pip install -e '.[dev]'
+assumption-ops-cluster --machines 4 --tasks 64 --output-dir cluster_results
+# Reuse verified files already downloaded from the publisher:
+assumption-ops-cluster --machine-events /path/to/google_machine_events.csv.gz \
+  --task-events /path/to/google_task_events.csv.gz \
+  --cutoffs-us 900000000 1200000000 1800000000 --machines 4 --tasks 64
+```
+
+[Open the Google-cluster Colab notebook](https://colab.research.google.com/github/crypticsymmetry/improved-giggle/blob/main/notebooks/google_cluster_benchmark.ipynb)
+for the complete download, preparation, comparison and report workflow. The
+[benchmark contract](docs/google_cluster_benchmark.md) explains cohort selection,
+normalization, missing-record handling and the model's limits.
+
+Each task is placed on one selected machine or remains pending. Both resource
+capacities must hold. The objective minimizes the sum of pending-task admission
+weights plus changes from the shared initial optimized placement. Admission
+weights are `trace_priority + 1`, an explicit modeling assumption. Migration cost
+also includes retirement of a formerly assigned task. All later strategies share
+the same frozen initial reference; this is a comparison of proposed snapshots,
+not a simulation of each strategy's executed history.
+
+Comparators are binary MILP, priority-first-fit, best-fit and stability-aware
+best-fit placement. Independent accounting checks task coverage, integer assignments, both capacity dimensions,
+and the full objective. A feasible time-limited incumbent retains that status.
+The LP relaxation supplies a lower bound only when optimality, primal feasibility
+and the objective have been independently verified. Fractional LP assignments
+are never rounded into task placements. Unlike the transportation model, this
+multi-resource packing model need not have an integral relaxation.
+
+ATMS justifications for each placement include the selected machine's capacity
+and the requirements of **all colocated tasks**. Changing a neighbor's request
+can therefore invalidate the entire shared-capacity justification. These supports
+establish feasibility dependencies, not global optimality: the next snapshot is
+reoptimized even when no old decision loses support. Reports retain the source
+hashes, modeled input fingerprint, solver status, per-method scores and support
+impacts, without summing overlapping snapshots into jobs completed or savings.
+
+The inputs are real publisher records; the experiment is a **controlled model**.
+Selected machines contribute their full recorded capacity to a selected workload
+cohort. Existing occupancy is not reconstructed or claimed to be free. General
+machine affinity, disk, network, dependencies, execution duration and Google's
+production scheduling policy are not modeled. Flagged different-machine tasks
+are excluded. Google resource values are normalized requests/limits, not literal
+cores/bytes or measured runtime consumption; this model imposes hard capacities
+rather than Google's possible overcommitment. Event timestamps provide simulated
+visibility, because actual per-record ingestion timestamps are absent. No live
+cluster is contacted for scheduling or execution.
+
+Source and attribution: Google, Charles Reiss, John Wilkes and Joseph Hellerstein,
+[ClusterData2011-2 and format documentation](https://github.com/google/cluster-data/blob/master/ClusterData2011_2.md),
+published under the publisher's CC-BY terms. Google notes missing and synthesized
+events; this benchmark excludes uncertain submissions instead of inventing
+resource requirements.
+
+
+Verified public-source results are preserved in
+[`examples/google_cluster_benchmark_summary.json`](examples/google_cluster_benchmark_summary.json).
+The four-machine notebook configuration produces these scores (lower is better):
+
+| Minutes after trace start | Active cohort tasks | MILP | Priority first fit | Best fit | Stability best fit | LP lower bound |
+|---:|---:|---:|---:|---:|---:|---:|
+| 5 | 54 | 10 | 28 | 29 | 29 | 9.7904 |
+| 10 | 52 | 10 | 66 | 66 | 47 | 8.4198 |
+| 20 | 50 | 12 | 62 | 61 | 52 | 9.1709 |
+
+All three MILP runs returned independently checked optimal assignments. Later
+scores include migration/retirement costs from the shared initial MILP reference.
+The recorded capacity sensitivity includes all selected machine counts 1, 2, 4
+and 8: first-snapshot MILP scores are 60, 40, 10 and 0 respectively; at eight
+machines all baselines also score 0. These are results for this projection, not
+held-out generalization or a comparison against Google's scheduler. Exact tied
+assignments and later migration costs can vary with solver versions.
