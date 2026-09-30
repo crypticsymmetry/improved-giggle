@@ -1,7 +1,7 @@
 """Execute repository notebooks in real Jupyter kernels; keep outputs out of git.
 
-Install the package first: python -m pip install -e '.[dev]'. By default both
-notebooks execute. Optional arguments select notebook paths relative to the repo.
+Install the package first: python -m pip install -e '.[dev]'. By default all
+repository notebooks execute. Optional arguments select paths relative to the repo.
 """
 
 import argparse

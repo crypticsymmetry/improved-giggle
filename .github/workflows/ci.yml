@@ -25,3 +25,4 @@ jobs:
       - run: assumption-ops --supplies-csv examples/supplies.csv --orders-csv examples/orders.csv --policy-json examples/policy.json --delay-supply shipment --available-day 8 --compare examples/interventions.json --report-csv /tmp/interventions.csv > /tmp/comparison.json
       - run: python scripts/benchmark.py --orders 10 --repeats 1 > /tmp/benchmark.json
       - run: python scripts/replay_workflow.py > /tmp/workflow.json
+      - run: assumption-ops-replay --orders 6 --seeds 1729 --output-dir /tmp/replay-results > /tmp/replay.json

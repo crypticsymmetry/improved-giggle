@@ -79,6 +79,10 @@ and changing the current evidence ID conservatively invalidates earlier support.
 | `src/assumption_ops/optimizer.py` | Sparse integer allocation model, shortages, substitutions, dates, stability penalties, independent solution verification |
 | `src/assumption_ops/pipeline.py` | Snapshot-based planning, read-only what-if solves, support explanations, persisted decisions, approvals, inventory reservations, execution intents |
 | `src/assumption_ops/cli.py` | Reproducible JSON scenario runner |
+| `src/assumption_ops/replay.py` | Chronological evidence replay, common-reference allocation comparison, service accounting and active-plan review proxies |
+| `src/assumption_ops/replay_io.py` | Versioned replay JSON intake and spreadsheet-safe snapshot CSV export |
+| `src/assumption_ops/replay_fixtures.py` | Fixed-seed synthetic supplier-delay, stock-loss, demand-surge and cost-shock traces |
+| `src/assumption_ops/replay_cli.py` | Multi-case replay runner with reusable inputs, raw reports and per-case manifest |
 | `notebooks/colab_demo.ipynb` | End-to-end executable walkthrough plus an alternative-support reasoning example |
 | `tests/` | Component, independent-oracle, persistence, failure, and concurrent-commit checks |
 
@@ -378,3 +382,96 @@ booked by local plan commits. External dispatch, authenticated review, release,
 and compensation of already committed inventory remain integration work.
 
 New modules: `events.py` and `execution.py`.
+
+
+## v0.4: chronological business-scenario replay
+
+[**Run the replay benchmark in Google Colab**](https://colab.research.google.com/github/crypticsymmetry/improved-giggle/blob/main/notebooks/replay_benchmark.ipynb)
+
+This milestone measures allocation quality and operational review proxies before
+connecting execution to an external system. The supplied cases are synthetic,
+with fixed seeds and explicit source labels. They cover supplier delays and
+corrections, stock losses and replenishment, demand revisions, and cost shocks.
+They are executable examples, not evidence of production performance or savings.
+
+```bash
+python -m pip install -e '.[dev]'
+assumption-ops-replay --orders 20 --seeds 1729 1730 1731 --output-dir replay_results
+# Or supply an explicitly labeled, chronological case:
+assumption-ops-replay --case examples/replay_case.json --output-dir replay_results
+```
+
+Each invocation exports a manifest plus an input JSON, detailed report JSON, and
+snapshot CSV for every case. Numbered filenames avoid interpreting case names as
+paths. The manifest lists only files from the current invocation; unrelated or
+older files in the output directory are retained. Input cases are read without
+modification. Successful outputs are written after all case solves complete;
+filesystem writes themselves are not a distributed transaction.
+
+```python
+from assumption_ops.replay import run_replay
+from assumption_ops.replay_fixtures import synthetic_cases
+from assumption_ops.replay_io import (
+    load_replay_case, save_replay_case, write_replay_report_csv,
+)
+
+case = synthetic_cases(order_count=20, seed=1729)[0]
+report = run_replay(case)
+save_replay_case(case, "my_replay_case.json")
+assert load_replay_case("my_replay_case.json") == case
+write_replay_report_csv(report, "my_replay_snapshots.csv")
+print(report["summary"]["final_optimized"])
+```
+
+The replay seeds a fresh local evidence store, plans the initial snapshot, and
+applies only the next explicit confirmation batch at each step. Each delivery is
+immediately retried with the identical event ID and payload to check that the
+receipt is replayed without new evidence or operational events. No approval,
+commit, reservation, shipment, or payment is performed. Initial entity identities
+remain fixed; updates change fields on existing orders and supplies or replace
+policy configuration. New order/lot creation and reservation release are not yet
+supported by this replay format.
+
+At each snapshot the integer optimizer and deterministic greedy allocator see
+identical current demand, supply, eligibility and objective weights. Both are
+scored against the same **initial optimized allocation** after the initial step.
+This deliberately fixed reference makes snapshot comparisons interpretable; it
+is not a comparison of two independently executing strategies with their own
+previous allocations. Greedy orders by priority, then due date and identifier,
+and selects eligible supply by weighted unit cost. It is a transparent baseline,
+not a claim about the quality of a particular company's current process.
+
+The reports separate these measurements:
+
+| Measurement | Meaning |
+|---|---|
+| Final service and cost | Final projected fill, shortage, on-time units and independently reconstructed cost for each strategy |
+| Per-snapshot score gap | Greedy score minus optimizer score, under the same reference and weights; solver status accompanies each result |
+| Allocation changes | Changed arcs and L1 movement relative to the preceding optimized snapshot; moving one unit between lots counts two allocation-arc units |
+| Review proxy | Source-support invalidations among the preceding active plan's decisions, excluding historical proposals |
+| Confirmations and retries | Explicit updated fields, revision guards and duplicate-delivery verification |
+| Runtime | Machine-specific wall times and software environment; no hard latency guarantee |
+
+Repeated snapshots contain many of the same orders. The reports therefore do
+**not** sum their demand, shortage or projected acquisition costs. Cumulative
+allocation changes and event/review counts describe adaptation across the trace;
+final service describes the last snapshot only. Cost scores are configured
+penalty units and are not automatically dollars or ROI. Decision counts are not
+measured human review time. Support guards establish source justification and
+feasibility: zero affected decisions does not imply that a plan remains globally
+optimal after unrelated facts change.
+
+The versioned JSON schema requires `schema_version: 1`, a nonempty `name`, an
+explicit boolean `synthetic`, an `initial` scenario and ordered `batches`.
+`seed` is an optional nonnegative integer or null. Each batch has a unique
+`event_id` and nonempty `updates` with `entity`, `field`, `value` and `source`.
+Quantities and dates use the package's strict integer contracts. Unknown keys,
+identities and fields, duplicate JSON keys, nonfinite values and implicit numeric
+coercions are rejected. Setting `synthetic: false` is a caller provenance label,
+not an independent verification of the dataset's origin.
+
+For a business pilot, export a fixed planning snapshot plus time-ordered,
+explicitly confirmed revisions in this format. Calibrate all penalties in
+consistent units and compare final service, shortages, adaptation and review
+counts by case. The next integration should consume these local reports and
+explicit approvals before dispatching an external action.
